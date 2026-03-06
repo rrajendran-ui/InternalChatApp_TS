@@ -44,7 +44,7 @@ const MessagePage: React.FC = () => {
     fileName: "",
   });
 
-  const ai = new GoogleGenerativeAI("AIzaSyBU1GqE_0HdotsXj--Hw5E02Z4BVY3aLRI");
+  const ai = new GoogleGenerativeAI("");
   const currentMessage = useRef<HTMLDivElement | null>(null)
 
   /* SCROLL */
