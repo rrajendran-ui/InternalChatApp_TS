@@ -44,15 +44,16 @@ const MessagePage: React.FC = () => {
     fileName: "",
   });
 
-  const ai = new GoogleGenerativeAI("");
+  const ai = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_AI_KEY);
   const currentMessage = useRef<HTMLDivElement | null>(null)
 
   /* SCROLL */
   useEffect(() => {
-    if (currentMessage.current) {
-      currentMessage.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
-  }, [allMessage])
+    currentMessage.current?.scrollTo({
+      top: currentMessage.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [allMessage]);
   const formatChatDate = (date: Date) => {
     if (isToday(date)) return "Today";
     if (isYesterday(date)) return "Yesterday";
@@ -73,7 +74,7 @@ const MessagePage: React.FC = () => {
     }, {} as Record<string, IMessage[]>);
   }
   const groupedMessages = groupMessagesByDate(allMessage);
-  
+
   const handleUploadImageVideoOpen = () => {
     setOpenImageVideoUpload((prev) => !prev);
   };
@@ -205,6 +206,7 @@ const MessagePage: React.FC = () => {
 
     if (textValue.includes("@ai")) {
       const cleanMsg = textValue.replace("@ai", "").trim();
+      if (!cleanMsg) return;
       getAiResponse(cleanMsg);
     }
   };
@@ -212,11 +214,15 @@ const MessagePage: React.FC = () => {
   /* AI RESPONSE */
   const getAiResponse = async (userMessage: string) => {
     try {
-      const model = ai.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+      const model = ai.getGenerativeModel({
+        model: "gemini-1.5-flash-latest",
+      });
 
       const result = await model.generateContent(userMessage);
       const response = await result.response;
       const text = response.text();
+
+      if (!text) return;
 
       socket?.emit("send-topic-message", {
         topicId,
@@ -224,16 +230,15 @@ const MessagePage: React.FC = () => {
         text,
       });
     } catch (error: any) {
-      console.error(error);
-      alert(error.message);
+      console.error("AI Error:", error);
     }
   };
- const removeFile = () => {
+  const removeFile = () => {
     setMessage({
       fileUrl: "",
       fileName: ""
     });
-    
+
     editorRef.current?.focus();
   };
 
@@ -271,19 +276,20 @@ const MessagePage: React.FC = () => {
         <div>
           {Object.entries(groupedMessages).map(([date, allMessage]) => (
             <div key={date}>
-              <div className="text-center my-4 text-xs text-gray-400 p-1 py-1 rounded w-fit max-w-[280px] md:max-w-sm lg:max-w-md bg-white ml-[450px]">
+              <div className="text-center my-4 text-xs text-gray-400 p-1 py-1 rounded w-fit max-w-[280px] md:max-w-sm lg:max-w-md bg-white mx-auto">
                 {formatChatDate(new Date(date))}
               </div>
 
               <div className="flex flex-col gap-2 py-2 mx-2">
-                {allMessage.map((msg,index) => (
+                {allMessage.map((msg) => (
                   <div key={`${msg._id}-${msg.createdAt}`}
-                  ref={index === allMessage.length - 1 ? currentMessage : null} 
-                  className="mb-3 relative">
+                    //ref={index === allMessage.length - 1 ? currentMessage : null} 
+                    ref={currentMessage}
+                    className="mb-3 relative">
                     <div
                       className={`p-2 rounded max-w-md ${user?._id === msg.sender
-                          ? "ml-auto bg-teal-100"
-                          : "bg-white"
+                        ? "ml-auto bg-teal-100"
+                        : "bg-white"
                         }`}
                       onMouseEnter={() => setHover(msg._id)}
                       onMouseLeave={() => setHover(null)}
@@ -425,9 +431,17 @@ const MessagePage: React.FC = () => {
                 className="inline-flex items-center gap-1 px-2 py-1 mr-1 bg-blue-100 text-blue-700 rounded"
               >
                 {message.fileName}
-                <button onClick={removeFile} className="text-gray-500 m-[10px] text-[15px] font-bold hover:text-black cursor-pointer">
-               X
-              </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    removeFile();
+                  }}
+                  className="text-gray-500 m-[10px] text-[15px] font-bold hover:text-black cursor-pointer"
+                >
+                  X
+                </button>
               </span>
             )}
           </div>
