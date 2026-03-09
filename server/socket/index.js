@@ -140,18 +140,31 @@ io.on('connection', async (socket) => {
         "sender",
         "name profile_pic"
       );
+
       await ConversationModel.updateOne(
         { _id: topicId },
         { $set: { lastMessage: savedMessage._id } }
       );
-      // send message ONLY to that topic room
+
+      const updatedConversation = await ConversationModel.findById(topicId)
+        .populate({
+          path: "lastMessage",
+          select: "text imageUrl videoUrl fileName createdAt sender",
+          populate: { path: "sender", select: "name profile_pic" }
+        });
+
+      // send message to topic room
       io.to(topicId).emit("new-topic-message", populatedMessage);
+
+      // update sidebar for all participants
+      updatedConversation.participants.forEach((participantId) => {
+        io.to(participantId.toString()).emit("sidebar-update", updatedConversation);
+      });
 
     } catch (error) {
       console.error("Send message error:", error);
     }
   });
-
   //disconnect
   socket.on('disconnect', () => {
     onlineUser.delete(user?._id?.toString())
@@ -163,4 +176,3 @@ module.exports = {
   app,
   server
 }
-

@@ -24,20 +24,40 @@ const Sidebar = () => {
 
   // Listen to conversations from socket
   useEffect(() => {
-     console.log("Emitting sidebar event with socket:", socket);
   if (!socket || !user?._id) return;
-    console.log("Emitting sidebar event with user ID:", user._id);
+
   socket.emit("sidebar", user._id);
 
   const handleConversation = (data: IConversationSummary[]) => {
-    if (!Array.isArray(data)) return;
     setAllUser(data);
   };
 
+  const handleSidebarUpdate = (updatedConv: IConversationSummary) => {
+    setAllUser((prev) => {
+      const exists = prev.find((c) => c._id === updatedConv._id);
+
+      if (!exists) return prev;
+
+      const updated = prev.map((c) =>
+        c._id === updatedConv._id ? updatedConv : c
+      );
+
+      updated.sort(
+        (a, b) =>
+          new Date(b.lastMessage?.createdAt).getTime() -
+          new Date(a.lastMessage?.createdAt).getTime()
+      );
+
+      return updated;
+    });
+  };
+
   socket.on("conversation", handleConversation);
+  socket.on("sidebar-update", handleSidebarUpdate);
 
   return () => {
     socket.off("conversation", handleConversation);
+    socket.off("sidebar-update", handleSidebarUpdate);
   };
 
 }, [socket, user?._id]);
