@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Avatar from "./Avatar";
 import { HiDotsVertical } from "react-icons/hi";
-import { FaAngleLeft, FaPlus, FaImage, FaVideo, FaPaperclip } from "react-icons/fa6";
+import { FaAngleLeft, FaPlus, FaImage, FaVideo, FaPaperclip,FaUser } from "react-icons/fa6";
 import { IoClose, IoSend } from "react-icons/io5";
 import { FiEdit2, FiMoreVertical } from "react-icons/fi";
 import uploadFile from "../helpers/uploadFile";
@@ -29,6 +29,7 @@ const MessagePage: React.FC = () => {
     topicImage: "",
     lastMessage: undefined,
     unseenMsg: 0,
+    memberCount: 0,
   });
 
   const [openImageVideoUpload, setOpenImageVideoUpload] = useState(false);
@@ -139,6 +140,7 @@ const MessagePage: React.FC = () => {
 
 
     const handleTopicDetails = (topic: IConversationSummary) => {
+      topic.memberCount = topic.participants?.length || 0;
       setTopicData(topic);
       socket.emit("load-messages", topicId);
     };
@@ -153,7 +155,7 @@ const MessagePage: React.FC = () => {
         if (exists) return prev;
         return [...prev, newMsg];
       });
-    };
+    };    
 
     socket.on("topic-details", handleTopicDetails);
     socket.on("topic-messages", handleTopicMessages);
@@ -264,10 +266,13 @@ const MessagePage: React.FC = () => {
 
           <div>
             <h3 className="font-semibold text-lg">{topicData.topic || "Topic"}</h3>
-            <p className="text-sm text-slate-400">Topic Discussion</p>
+            {/* <p className="text-sm text-slate-400">Topic Discussion</p> */}
           </div>
         </div>
-
+        <div className="flex items-center gap-1 text-xs text-slate-500 ml-[730px]">
+    <FaUser size={12} />
+    <span className="ml-[-7px] mt-[3px] text-gray-500 font-bold text-[11px]">+{topicData.memberCount}</span>
+  </div>
         <HiDotsVertical />
       </header>
 

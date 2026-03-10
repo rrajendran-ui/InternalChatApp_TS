@@ -49,7 +49,9 @@ export interface IConversationSummary {
   topic: string;
   topicImage?: string;
   lastMessage?: IMessage;
+  participants?: string[];
   unseenMsg: number;
+  memberCount: number;
 }
 
 export interface UserSearchCardProps {

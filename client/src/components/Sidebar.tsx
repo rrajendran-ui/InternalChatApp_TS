@@ -45,6 +45,7 @@ const Sidebar = () => {
       updated.sort(
         (a, b) =>
           new Date(b.lastMessage?.createdAt).getTime() -
+          //new Date(a.lastMessage?.createdAt).getTime()
           new Date(a.lastMessage?.createdAt).getTime()
       );
 
@@ -155,7 +156,7 @@ const Sidebar = () => {
                     )}
                   </div>
                   <p className='text-ellipsis line-clamp-1 w-[105px]'>
-                    {conv.lastMessage?.text || conv.lastMessage?.fileName || "No messages yet"}
+                    {conv.lastMessage?.text || conv.lastMessage?.fileName }
                   </p>
                   <p className='text-xs ml-auto w-[60px] text-right'>
                     {conv.lastMessage?.createdAt && moment(conv.lastMessage.createdAt).format('hh:mm A')}

@@ -77,6 +77,7 @@ io.on('connection', async (socket) => {
         topic: conv.topic,
         topicImage: '', // optional topic avatar
         lastMessage: conv.lastMessage,
+        memberCount: conv.participants.length,
         unseenMsg: 0
         // unseenMsg: conv.participants.reduce((count, p) => {
         //   if (p._id.toString() !== userId.toString() && conv.lastMessage?.seenBy?.indexOf(userId) === -1) {
@@ -98,7 +99,7 @@ io.on('connection', async (socket) => {
     socket.join(topicId);
 
     const topic = await ConversationModel.findById(topicId);
-
+    console.log("Joined topic:", topicId, "Topic details:", topic);
     socket.emit("topic-details", topic);
   });
 
