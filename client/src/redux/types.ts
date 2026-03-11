@@ -27,6 +27,7 @@ export interface IMessage {
   conversationId: string;
   createdAt: string;
   updatedAt: string;
+  isEdited: boolean;
 }
 
 /**

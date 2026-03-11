@@ -166,6 +166,38 @@ io.on('connection', async (socket) => {
       console.error("Send message error:", error);
     }
   });
+  socket.on("update-message", async (data) => {
+    try {
+
+      const { messageId, text, topicId } = data;
+
+      const updatedMessage = await MessageModel.findByIdAndUpdate(
+        messageId,
+        {
+          text: text,
+          edited: true
+        },
+        { new: true }
+      );
+
+      if (!updatedMessage) return;
+
+      // send updated message to topic room
+      io.to(topicId).emit("message-updated", updatedMessage);
+
+      // update sidebar
+      const topic = await TopicModel.findById(topicId);
+
+      io.emit("sidebar-update", {
+        topicId,
+        lastMessage: updatedMessage.text,
+        updatedAt: updatedMessage.updatedAt
+      });
+
+    } catch (error) {
+      console.log("Update Message Error:", error);
+    }
+  });
   //disconnect
   socket.on('disconnect', () => {
     onlineUser.delete(user?._id?.toString())

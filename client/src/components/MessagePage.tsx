@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Avatar from "./Avatar";
 import { HiDotsVertical } from "react-icons/hi";
-import { FaAngleLeft, FaPlus, FaImage, FaVideo, FaPaperclip,FaUser } from "react-icons/fa6";
+import { FaAngleLeft } from "react-icons/fa";
+import { FaPlus, FaImage, FaVideo, FaPaperclip, FaUser } from "react-icons/fa6";
 import { IoClose, IoSend } from "react-icons/io5";
-import { FiEdit2, FiMoreVertical } from "react-icons/fi";
+import { FiCheck, FiEdit2, FiMoreVertical, FiPlus, FiX } from "react-icons/fi";
 import uploadFile from "../helpers/uploadFile";
 import Loading from "./Loading";
 import backgroundImage from "../assets/wallapaper.jpeg";
@@ -22,7 +23,12 @@ const MessagePage: React.FC = () => {
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.user);
 
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
   const [topicData, setTopicData] = useState<IConversationSummary>({
     _id: "",
     topic: "",
@@ -33,8 +39,7 @@ const MessagePage: React.FC = () => {
   });
 
   const [openImageVideoUpload, setOpenImageVideoUpload] = useState(false);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [hover, setHover] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [allMessage, setAllMessage] = useState<IMessage[]>([]);
 
   const [message, setMessage] = useState<Partial<IMessage>>({
@@ -46,91 +51,63 @@ const MessagePage: React.FC = () => {
   });
 
   const ai = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_AI_KEY);
-  const currentMessage = useRef<HTMLDivElement | null>(null)
 
-  /* SCROLL */
+  /* AUTO SCROLL */
   useEffect(() => {
-    currentMessage.current?.scrollTo({
-      top: currentMessage.current.scrollHeight,
-      behavior: "smooth",
-    });
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [allMessage]);
+
   const formatChatDate = (date: Date) => {
     if (isToday(date)) return "Today";
     if (isYesterday(date)) return "Yesterday";
-    return format(date, "dd MMMM"); // 21 January 2026
+    return format(date, "dd MMMM");
   };
-  function groupMessagesByDate(messages: IMessage[]): Record<string, IMessage[]> {
-    return messages.reduce((groups, message) => {
-      const dateKey = new Date(message.createdAt)
-        .toISOString()
-        .split("T")[0]; // YYYY-MM-DD
 
-      if (!groups[dateKey]) {
-        groups[dateKey] = [];
-      }
-
-      groups[dateKey].push(message);
+  const groupMessagesByDate = (messages: IMessage[]) => {
+    return messages.reduce((groups: Record<string, IMessage[]>, msg) => {
+      const key = new Date(msg.createdAt).toISOString().split("T")[0];
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(msg);
       return groups;
-    }, {} as Record<string, IMessage[]>);
-  }
+    }, {});
+  };
+
   const groupedMessages = groupMessagesByDate(allMessage);
 
-  const handleUploadImageVideoOpen = () => {
-    setOpenImageVideoUpload((prev) => !prev);
-  };
+  /* FILE UPLOAD */
 
-  /* IMAGE UPLOAD */
   const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target?.files?.[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     setLoading(true);
     const uploadUrl = await uploadFile(file);
     setLoading(false);
-    setOpenImageVideoUpload(false);
-    let filePath = ""; let imagePath = "";
-    let fileName = "";
-    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-      filePath = uploadUrl.url;
-      fileName = file.name;
-    }
-    else {
-      imagePath = uploadUrl.url;
-    }
-    setMessage(preve => {
-      return {
-        ...preve,
-        imageUrl: imagePath,
-        fileUrl: filePath,
-        fileName: fileName
-      }
 
+    if (file.type.startsWith("image/")) {
+      setMessage((prev) => ({ ...prev, imageUrl: uploadUrl.url }));
+    } else {
+      setMessage((prev) => ({
+        ...prev,
+        fileUrl: uploadUrl.url,
+        fileName: file.name,
+      }));
     }
-    );
   };
 
   const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target?.files?.[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     setLoading(true);
     const uploadUrl = await uploadFile(file);
     setLoading(false);
-    setOpenImageVideoUpload(false);
 
     setMessage((prev) => ({ ...prev, videoUrl: uploadUrl.url }));
   };
 
-  const handleClearUploadImage = () => {
-    setMessage((prev) => ({ ...prev, imageUrl: "" }));
-  };
+  /* SOCKET EVENTS */
 
-  const handleClearUploadVideo = () => {
-    setMessage((prev) => ({ ...prev, videoUrl: "" }));
-  };
-
-  /* LOAD TOPIC MESSAGES */
   useEffect(() => {
     if (!socket || !topicId) return;
 
@@ -138,52 +115,56 @@ const MessagePage: React.FC = () => {
 
     socket.emit("join-topic", topicId);
 
-
-    const handleTopicDetails = (topic: IConversationSummary) => {
+    socket.on("topic-details", (topic: IConversationSummary) => {
       topic.memberCount = topic.participants?.length || 0;
       setTopicData(topic);
       socket.emit("load-messages", topicId);
-    };
+    });
 
-    const handleTopicMessages = (messages: IMessage[]) => {
-      setAllMessage(messages);
-    };
+    socket.on("topic-messages", (msgs: IMessage[]) => {
+      setAllMessage(msgs);
+    });
 
-    const handleNewMessage = (newMsg: IMessage) => {
+    socket.on("new-topic-message", (msg: IMessage) => {
       setAllMessage((prev) => {
-        const exists = prev.some((msg) => msg._id === newMsg._id);
-        if (exists) return prev;
-        return [...prev, newMsg];
+        if (prev.find((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
       });
-    };    
+    });
 
-    socket.on("topic-details", handleTopicDetails);
-    socket.on("topic-messages", handleTopicMessages);
-    socket.on("new-topic-message", handleNewMessage);
+    const handleUpdatedMessage = (updatedMsg: IMessage) => {
+  setAllMessage((prev) =>
+    prev.map((msg) =>
+      msg._id === updatedMsg._id ? updatedMsg : msg
+    )
+  );
+};
 
+socket.on("message-updated", handleUpdatedMessage);
     return () => {
-      socket.off("topic-details", handleTopicDetails);
-      socket.off("topic-messages", handleTopicMessages);
-      socket.off("new-topic-message", handleNewMessage);
+      socket.off("topic-details");
+      socket.off("topic-messages");
+      socket.off("new-topic-message");
+      socket.off("message-updated");
     };
   }, [socket, topicId]);
 
-  /* GET TEXT */
-  const getMessageText = (): string => {
+  /* GET MESSAGE TEXT */
+
+  const getMessageText = () => {
     if (!editorRef.current) return "";
-    const cloned = editorRef.current.cloneNode(true) as HTMLElement;
-    cloned.querySelectorAll("[contenteditable='false']").forEach((el) => el.remove());
-    return cloned.innerText.trim();
+    return editorRef.current.innerText.trim();
   };
 
   /* SEND MESSAGE */
-  const handleSendMessage = (e: React.FormEvent<HTMLFormElement>) => {
+
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!socket || !topicId) return;
 
     const textValue = getMessageText();
 
-    if (!textValue && !message.imageUrl && !message.fileUrl && !message.videoUrl)
+    if (!textValue && !message.imageUrl && !message.videoUrl && !message.fileUrl)
       return;
 
     socket.emit("send-topic-message", {
@@ -198,264 +179,219 @@ const MessagePage: React.FC = () => {
 
     if (editorRef.current) editorRef.current.innerHTML = "";
 
-    setMessage({
-      text: "",
-      imageUrl: "",
-      videoUrl: "",
-      fileUrl: "",
-      fileName: "",
-    });
-
-    if (textValue.includes("@ai")) {
-      const cleanMsg = textValue.replace("@ai", "").trim();
-      if (!cleanMsg) return;
-      getAiResponse(cleanMsg);
-    }
+    setMessage({});
   };
 
-  /* AI RESPONSE */
-  const getAiResponse = async (userMessage: string) => {
-    try {
-      const model = ai.getGenerativeModel({
-        model: "gemini-1.5-flash-latest",
-      });
+  /* EDIT MESSAGE */
 
-      const result = await model.generateContent(userMessage);
-      const response = await result.response;
-      const text = response.text();
+  const handleEditMessage = (msgId: string) => {
+    if (!socket) return;
 
-      if (!text) return;
-
-      socket?.emit("send-topic-message", {
-        topicId,
-        sender: user?._id,
-        text,
-      });
-    } catch (error: any) {
-      console.error("AI Error:", error);
-    }
-  };
-  const removeFile = () => {
-    setMessage({
-      fileUrl: "",
-      fileName: ""
+    socket.emit("update-message", {
+      messageId: msgId,
+      text: editText,
     });
 
-    editorRef.current?.focus();
+    setEditingMsgId(null);
+    setEditText("");
   };
 
   return (
     <div
       style={{ backgroundImage: `url(${backgroundImage})` }}
-      className="bg-no-repeat bg-cover"
+      className="bg-cover"
     >
       {/* HEADER */}
+
       <header className="sticky top-0 h-16 bg-white flex justify-between items-center px-4">
+
         <div className="flex items-center gap-4">
           <Link to="/" className="lg:hidden">
-            <FaAngleLeft size={25} />
+            <FaAngleLeft size={22} />
           </Link>
 
           <Avatar
-            width={50}
-            height={50}
+            width={45}
+            height={45}
             imageUrl={topicData.topicImage || ""}
-            name={topicData.topic || "Topic"}
+            name={topicData.topic}
             userId={topicData._id}
           />
 
           <div>
-            <h3 className="font-semibold text-lg">{topicData.topic || "Topic"}</h3>
-            {/* <p className="text-sm text-slate-400">Topic Discussion</p> */}
+            <h3 className="font-semibold text-lg">{topicData.topic}</h3>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-xs text-slate-500 ml-[730px]">
-    <FaUser size={12} />
-    <span className="ml-[-7px] mt-[3px] text-gray-500 font-bold text-[11px]">+{topicData.memberCount}</span>
-  </div>
+
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <FaUser size={12} />
+          <span className="font-bold text-[11px]">
+            +{topicData.memberCount}
+          </span>
+        </div>
+
         <HiDotsVertical />
       </header>
 
-      {/* MESSAGES */}
+      {/* MESSAGE AREA */}
+
       <section className="h-[calc(100vh-128px)] overflow-y-auto p-3">
-        <div>
-          {Object.entries(groupedMessages).map(([date, allMessage]) => (
-            <div key={date}>
-              <div className="text-center my-4 text-xs text-gray-400 p-1 py-1 rounded w-fit max-w-[280px] md:max-w-sm lg:max-w-md bg-white mx-auto">
-                {formatChatDate(new Date(date))}
-              </div>
 
-              <div className="flex flex-col gap-2 py-2 mx-2">
-                {allMessage.map((msg) => (
-                  <div key={`${msg._id}-${msg.createdAt}`}
-                    //ref={index === allMessage.length - 1 ? currentMessage : null} 
-                    ref={currentMessage}
-                    className="mb-3 relative">
-                    <div
-                      className={`p-2 rounded max-w-md ${user?._id === msg.sender
-                        ? "ml-auto bg-teal-100"
-                        : "bg-white"
-                        }`}
-                      onMouseEnter={() => setHover(msg._id)}
-                      onMouseLeave={() => setHover(null)}
-                    >
-                      {msg.imageUrl && <img src={msg.imageUrl} alt="" />}
-                      {msg.videoUrl && <video src={msg.videoUrl} controls />}
+        {Object.entries(groupedMessages).map(([date, msgs]) => (
+          <div key={date}>
 
-                      {msg.fileUrl && (
-                        <a
-                          href={msg.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline"
-                        >
-                          {msg.fileName}
-                        </a>
-                      )}
+            <div className="text-center text-xs text-gray-400 my-4">
+              {formatChatDate(new Date(date))}
+            </div>
 
-                      <Markdown remarkPlugins={[remarkGfm]}>
-                        {msg.text}
-                      </Markdown>
+            {msgs.map((msg) => (
 
-                      {hover === msg._id && user?._id === msg.sender && (
-                        <div className="absolute right-0 -top-5 flex gap-2 bg-white shadow px-2 py-1 rounded">
-                          <FiEdit2 size={16} />
-                          <FiMoreVertical size={14} />
-                        </div>
-                      )}
+              <div
+                key={msg._id}
+                className={`group relative max-w-md p-2 rounded mb-2 ${
+                  user?._id === msg.sender
+                    ? "ml-auto bg-teal-100"
+                    : "bg-white"
+                }`}
+              >
 
-                      <p className="text-xs w-fit ml-auto">
-                        {moment(msg.createdAt).format("hh:mm A")}
-                      </p>
+                {editingMsgId === msg._id ? (
+                  <div>
+
+                    <textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="w-full border rounded p-2 text-sm"
+                    />
+
+                    <div className="flex gap-3 mt-2 justify-end">
+                      <FiCheck
+                        className="cursor-pointer"
+                        onClick={() => handleEditMessage(msg._id)}
+                      />
+                      <FiX
+                        className="cursor-pointer"
+                        onClick={() => setEditingMsgId(null)}
+                      />
                     </div>
+
                   </div>
-                ))}
+                ) : (
+                  <div>
+
+                    {msg.imageUrl && (
+                      <img src={msg.imageUrl} className="rounded mb-1" />
+                    )}
+
+                    {msg.videoUrl && (
+                      <video src={msg.videoUrl} controls />
+                    )}
+
+                    {msg.fileUrl && (
+                      <a
+                        href={msg.fileUrl}
+                        target="_blank"
+                        className="text-blue-600 underline"
+                      >
+                        {msg.fileName}
+                      </a>
+                    )}
+
+                    <Markdown remarkPlugins={[remarkGfm]}>
+                      {msg.text}
+                    </Markdown>
+                    {msg.isEdited && (
+  <span className="text-[10px] text-gray-400 ml-2">Edited</span>
+)}
+                    <p className="text-xs text-right">
+                      {moment(msg.createdAt).format("hh:mm A")}
+                    </p>
+
+                  </div>
+                )}
+
+                {user?._id === msg.sender && editingMsgId !== msg._id && (
+                  <div className="absolute top-[-15px] right-0 hidden group-hover:flex gap-2 bg-white shadow px-2 py-1 rounded">
+
+                    <FiEdit2
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setEditingMsgId(msg._id);
+                        setEditText(msg.text);
+                      }}
+                    />
+
+                    <FiMoreVertical />
+
+                  </div>
+                )}
+
               </div>
-            </div>
-          ))}
-        </div>
 
-        {/* IMAGE PREVIEW */}
-        {message.imageUrl && (
-          <div className="w-full h-full sticky bottom-0 bg-slate-700 bg-opacity-30 flex justify-center items-center rounded overflow-hidden">
-            <div
-              className="w-fit p-2 absolute top-0 right-0 cursor-pointer hover:text-red-600"
-              onClick={handleClearUploadImage}
-            >
-              <IoClose size={30} />
-            </div>
-            <div className="bg-white p-3">
-              <img
-                src={message.imageUrl}
-                alt="uploadImage"
-                className="aspect-square w-full h-full max-w-sm m-2 object-scale-down"
-              />
-            </div>
-          </div>
-        )}
+            ))}
 
-        {/* VIDEO PREVIEW */}
-        {message.videoUrl && (
-          <div className="w-full h-full sticky bottom-0 bg-slate-700 bg-opacity-30 flex justify-center items-center rounded overflow-hidden">
-            <div
-              className="w-fit p-2 absolute top-0 right-0 cursor-pointer hover:text-red-600"
-              onClick={handleClearUploadVideo}
-            >
-              <IoClose size={30} />
-            </div>
-            <div className="bg-white p-3">
-              <video
-                src={message.videoUrl}
-                className="aspect-square w-full h-full max-w-sm m-2 object-scale-down"
-                controls
-                muted
-                autoPlay
-              />
-            </div>
           </div>
-        )}
+        ))}
 
-        {loading && (
-          <div className="flex justify-center items-center">
-            <Loading />
-          </div>
-        )}
+        <div ref={scrollRef}></div>
+
+        {loading && <Loading />}
+
       </section>
 
       {/* SEND MESSAGE */}
+
       <section className="h-16 bg-white flex items-center px-4">
+
         <button
-          onClick={handleUploadImageVideoOpen}
-          className="flex justify-center items-center w-11 h-11 rounded-full hover:bg-primary hover:text-white"
+          onClick={() =>
+            setOpenImageVideoUpload((prev) => !prev)
+          }
+          className="w-10 h-10 flex justify-center items-center rounded-full hover:bg-gray-200"
         >
-          <FaPlus size={20} />
+          <FaPlus />
         </button>
 
         {openImageVideoUpload && (
-          <div className="bg-white shadow rounded absolute bottom-14 w-36 p-2">
-            <form>
-              <label
-                htmlFor="uploadImage"
-                className="flex items-center p-2 gap-2 cursor-pointer hover:bg-gray-100"
-              >
-                <FaImage /> Image
-              </label>
+          <div className="absolute bottom-16 bg-white shadow rounded w-36 p-2">
 
-              <label
-                htmlFor="uploadVideo"
-                className="flex items-center p-2 gap-2 cursor-pointer hover:bg-gray-100"
-              >
-                <FaVideo /> Video
-              </label>
+            <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
+              <FaImage /> Image
+              <input type="file" hidden onChange={handleUploadImage} />
+            </label>
 
-              <label
-                htmlFor="uploadFiles"
-                className="flex items-center p-2 gap-2 cursor-pointer hover:bg-gray-100"
-              >
-                <FaPaperclip /> Attach File
-              </label>
+            <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
+              <FaVideo /> Video
+              <input type="file" hidden onChange={handleUploadVideo} />
+            </label>
 
-              <input type="file" id="uploadImage" onChange={handleUploadImage} hidden />
-              <input type="file" id="uploadVideo" onChange={handleUploadVideo} hidden />
-              <input type="file" id="uploadFiles" onChange={handleUploadImage} hidden />
-            </form>
+            <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
+              <FaPaperclip /> File
+              <input type="file" hidden onChange={handleUploadImage} />
+            </label>
+
           </div>
         )}
 
-        <form className="h-full flex w-full gap-2" onSubmit={handleSendMessage}>
+        <form
+          onSubmit={handleSendMessage}
+          className="flex gap-2 w-full ml-2"
+        >
+
           <div
             ref={editorRef}
             contentEditable
-            suppressContentEditableWarning
-            data-placeholder="Type something..."
-            className="flex-1 min-h-[42px] px-3 py-2 border rounded-xl border-gray-400 focus:outline-none"
-          >
-            {message.fileName && (
-              <span
-                contentEditable={false}
-                className="inline-flex items-center gap-1 px-2 py-1 mr-1 bg-blue-100 text-blue-700 rounded"
-              >
-                {message.fileName}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    removeFile();
-                  }}
-                  className="text-gray-500 m-[10px] text-[15px] font-bold hover:text-black cursor-pointer"
-                >
-                  X
-                </button>
-              </span>
-            )}
-          </div>
+            className="flex-1 border rounded-xl px-3 py-2"
+          />
 
-          <button className="text-primary hover:text-secondary">
-            <IoSend size={28} />
+          <button className="text-primary">
+            <IoSend size={26} />
           </button>
+
         </form>
+
       </section>
+
     </div>
   );
 };
