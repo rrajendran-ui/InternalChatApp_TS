@@ -169,13 +169,17 @@ io.on('connection', async (socket) => {
   socket.on("update-message", async (data) => {
     try {
 
-      const { messageId, text, topicId } = data;
-
+      const { messageId, text, topicId } = data; 
+      console.log("Update message request:", data);     
       const updatedMessage = await MessageModel.findByIdAndUpdate(
         messageId,
         {
           text: text,
-          edited: true
+          isEdited: true,
+          imageUrl: data.imageUrl,
+          videoUrl: data.videoUrl,
+          fileUrl: data.fileUrl,
+          fileName: data.fileName,
         },
         { new: true }
       );
@@ -183,7 +187,7 @@ io.on('connection', async (socket) => {
       if (!updatedMessage) return;
 
       // send updated message to topic room
-      io.to(topicId).emit("message-updated", updatedMessage);
+      io.to(updatedMessage.topicId).emit("message-updated", updatedMessage); 
 
       // update sidebar
       const topic = await TopicModel.findById(topicId);

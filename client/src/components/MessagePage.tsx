@@ -25,7 +25,8 @@ const MessagePage: React.FC = () => {
 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-
+  const [existingAttachment, setExistingAttachment] = useState<any>(null);
+  const [newAttachment, setNewAttachment] = useState<File | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -78,12 +79,13 @@ const MessagePage: React.FC = () => {
 
   const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    setNewAttachment(e.target.files?.[0] || null)
     if (!file) return;
 
     setLoading(true);
     const uploadUrl = await uploadFile(file);
     setLoading(false);
-
+    console.log("Upload URL:", uploadUrl);
     if (file.type.startsWith("image/")) {
       setMessage((prev) => ({ ...prev, imageUrl: uploadUrl.url }));
     } else {
@@ -133,7 +135,7 @@ const MessagePage: React.FC = () => {
     });
 
     const handleUpdatedMessage = (updatedMsg: IMessage) => {
-  setAllMessage((prev) =>
+      setAllMessage((prev) =>
     prev.map((msg) =>
       msg._id === updatedMsg._id ? updatedMsg : msg
     )
@@ -184,18 +186,54 @@ socket.on("message-updated", handleUpdatedMessage);
 
   /* EDIT MESSAGE */
 
-  const handleEditMessage = (msgId: string) => {
-    if (!socket) return;
+  const handleEditMessage = async (msgId: string) => {
+  if (!socket) return; 
+  let imageUrl = existingAttachment?.type === "image" ? existingAttachment.url : "";
+  let videoUrl = existingAttachment?.type === "video" ? existingAttachment.url : "";
+  let fileUrl = existingAttachment?.type === "file" ? existingAttachment.url : "";
+  let fileName = existingAttachment?.name || "";
+    //console.log("Existing Attachment:", existingAttachment);
+    //console.log("New Attachment:", newAttachment?.type);
+    //console.log("message", message);
+  // If user uploaded new file
+  if (newAttachment) {
+    //const uploaded = await uploadFile(newAttachment);
 
-    socket.emit("update-message", {
-      messageId: msgId,
-      text: editText,
-    });
+    if (newAttachment.type.startsWith("image")) {
+      imageUrl = message.imageUrl || "";
+      videoUrl = "";
+      fileUrl = "";
+      fileName = newAttachment.name
+    } 
+    else if (newAttachment.type.startsWith("video")) {
+      videoUrl = message.videoUrl;
+      imageUrl = "";
+      fileUrl = "";
+      fileName = newAttachment.name
+    } 
+    else {
+      fileUrl = message.fileUrl || "";
+      fileName = message.fileName || "";
+      imageUrl = "";
+      videoUrl = "";
+    }
+  }
+  //console.log("Final URLs:", { imageUrl, videoUrl, fileUrl, fileName });
+  socket.emit("update-message", {
+    messageId: msgId,
+    text: editText,
+    imageUrl,
+    videoUrl,
+    fileUrl,
+    fileName,
+  });
 
-    setEditingMsgId(null);
-    setEditText("");
-  };
-
+  setEditingMsgId(null);
+  setEditText("");
+  setNewAttachment(null);
+  setExistingAttachment(null);
+};
+ 
   return (
     <div
       style={{ backgroundImage: `url(${backgroundImage})` }}
@@ -245,10 +283,13 @@ socket.on("message-updated", handleUpdatedMessage);
             </div>
 
             {msgs.map((msg) => (
-
+              <div className="group relative max-w-md p-2 rounded mb-2 ml-auto ">
+                {msg.isEdited && (
+  <span className="text-[10px] text-gray-500">Edited</span>
+)}
               <div
                 key={msg._id}
-                className={`group relative max-w-md p-2 rounded mb-2 ${
+                className={`group relative max-w-md p-2 rounded mb-2 rounded-[10px] ${
                   user?._id === msg.sender
                     ? "ml-auto bg-teal-100"
                     : "bg-white"
@@ -256,29 +297,121 @@ socket.on("message-updated", handleUpdatedMessage);
               >
 
                 {editingMsgId === msg._id ? (
-                  <div>
+                  <div className="border rounded-lg p-3 bg-white">
 
-                    <textarea
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      className="w-full border rounded p-2 text-sm"
-                    />
+  {/* TEXT EDIT */}
+  <textarea
+    value={editText}
+    onChange={(e) => setEditText(e.target.value)}
+    className="w-full border rounded p-2 text-sm"
+  />
 
-                    <div className="flex gap-3 mt-2 justify-end">
-                      <FiCheck
-                        className="cursor-pointer"
-                        onClick={() => handleEditMessage(msg._id)}
-                      />
-                      <FiX
-                        className="cursor-pointer"
-                        onClick={() => setEditingMsgId(null)}
-                      />
-                    </div>
+  {/* EXISTING ATTACHMENT */}
+  {existingAttachment && !newAttachment && (
+    <div className="relative mt-3 w-fit">
 
-                  </div>
+      {existingAttachment.type === "image" && (
+        <img
+          src={existingAttachment.url}
+          className="h-28 rounded"
+        />
+      )}
+
+      {existingAttachment.type === "video" && (
+        <video
+          src={existingAttachment.url}
+          controls
+          className="h-28 rounded"
+        />
+      )}
+
+      {existingAttachment.type === "file" && (
+        <a
+          href={existingAttachment.url}
+          target="_blank"
+          className="text-blue-600 underline"
+        >
+          {existingAttachment.name}
+        </a>
+      )}
+
+      <button
+        onClick={() => setExistingAttachment(null)}
+        className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2"
+      >
+        ✕
+      </button>
+
+    </div>
+  )}
+
+  {/* NEW ATTACHMENT PREVIEW */}
+  {newAttachment && (
+    <div className="relative mt-3 w-fit">
+
+      {newAttachment.type.startsWith("image") && (
+        <img
+          src={URL.createObjectURL(newAttachment)}
+          className="h-28 rounded"
+        />
+      )}
+
+      {newAttachment.type.startsWith("video") && (
+        <video
+          src={URL.createObjectURL(newAttachment)}
+          controls
+          className="h-28 rounded"
+        />
+      )}
+
+      {!newAttachment.type.startsWith("image") &&
+        !newAttachment.type.startsWith("video") && (
+          <p className="text-sm">{newAttachment.name}</p>
+      )}
+
+      <button
+        onClick={() => setNewAttachment(null)}
+        className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2"
+      >
+        ✕
+      </button>
+
+    </div>
+  )}
+
+  {/* REPLACE FILE */}
+  <div className="mt-3 flex gap-3 items-center">
+
+    <label className="cursor-pointer text-sm flex items-center gap-1 text-gray-600">
+      <FaPaperclip />
+      Replace
+      <input
+        type="file"
+        hidden
+        onChange={handleUploadImage}
+      />
+    </label>
+
+  </div>
+
+  {/* ACTION BUTTONS */}
+  <div className="flex justify-end gap-3 mt-3">
+
+    <FiCheck
+      className="cursor-pointer text-green-600"
+      onClick={() => handleEditMessage(msg._id)}
+    />
+
+    <FiX
+      className="cursor-pointer text-gray-600"
+      onClick={() => setEditingMsgId(null)}
+    />
+
+  </div>
+
+</div>
                 ) : (
                   <div>
-
                     {msg.imageUrl && (
                       <img src={msg.imageUrl} className="rounded mb-1" />
                     )}
@@ -300,9 +433,7 @@ socket.on("message-updated", handleUpdatedMessage);
                     <Markdown remarkPlugins={[remarkGfm]}>
                       {msg.text}
                     </Markdown>
-                    {msg.isEdited && (
-  <span className="text-[10px] text-gray-400 ml-2">Edited</span>
-)}
+                    
                     <p className="text-xs text-right">
                       {moment(msg.createdAt).format("hh:mm A")}
                     </p>
@@ -318,6 +449,17 @@ socket.on("message-updated", handleUpdatedMessage);
                       onClick={() => {
                         setEditingMsgId(msg._id);
                         setEditText(msg.text);
+                        if (msg.imageUrl) {
+      setExistingAttachment({ type: "image", url: msg.imageUrl });
+    } else if (msg.videoUrl) {
+      setExistingAttachment({ type: "video", url: msg.videoUrl });
+    } else if (msg.fileUrl) {
+      setExistingAttachment({
+        type: "file",
+        url: msg.fileUrl,
+        name: msg.fileName,
+      });
+    }
                       }}
                     />
 
@@ -327,7 +469,7 @@ socket.on("message-updated", handleUpdatedMessage);
                 )}
 
               </div>
-
+</div>
             ))}
 
           </div>
