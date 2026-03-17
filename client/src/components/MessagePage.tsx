@@ -236,8 +236,8 @@ socket.on("message-updated", handleUpdatedMessage);
  
   return (
     <div
-      style={{ backgroundImage: `url(${backgroundImage})` }}
-      className="bg-cover"
+      
+      className="bg-white h-screen flex flex-col"
     >
       {/* HEADER */}
 
@@ -283,17 +283,19 @@ socket.on("message-updated", handleUpdatedMessage);
             </div>
 
             {msgs.map((msg) => (
-              <div className="group relative max-w-md p-2 rounded mb-2 ml-auto ">
+              <div className={`mb-3 flex ${
+    user?._id === msg.sender ? "justify-end" : "justify-start"
+  }`}>
                 {msg.isEdited && (
   <span className="text-[10px] text-gray-500">Edited</span>
 )}
               <div
                 key={msg._id}
-                className={`group relative max-w-md p-2 rounded mb-2 rounded-[10px] ${
-                  user?._id === msg.sender
-                    ? "ml-auto bg-teal-100"
-                    : "bg-white"
-                }`}
+                className={`p-2 rounded max-w-[60%] rounded-lg px-3 py-2 ${
+                user?._id === msg.sender
+                  ? "bg-teal-100"
+                  : "bg-gray-100"
+              }`}
               >
 
                 {editingMsgId === msg._id ? (
@@ -378,25 +380,16 @@ socket.on("message-updated", handleUpdatedMessage);
 
     </div>
   )}
-
-  {/* REPLACE FILE */}
-  <div className="mt-3 flex gap-3 items-center">
-
-    <label className="cursor-pointer text-sm flex items-center gap-1 text-gray-600">
-      <FaPaperclip />
-      Replace
+  {/* ACTION BUTTONS */}
+  <div className="flex justify-end gap-3 mt-3">
+<label className="cursor-pointer text-sm flex items-center gap-1 text-gray-600">
+      <FaPaperclip />      
       <input
         type="file"
         hidden
         onChange={handleUploadImage}
       />
     </label>
-
-  </div>
-
-  {/* ACTION BUTTONS */}
-  <div className="flex justify-end gap-3 mt-3">
-
     <FiCheck
       className="cursor-pointer text-green-600"
       onClick={() => handleEditMessage(msg._id)}
@@ -413,7 +406,7 @@ socket.on("message-updated", handleUpdatedMessage);
                 ) : (
                   <div>
                     {msg.imageUrl && (
-                      <img src={msg.imageUrl} className="rounded mb-1" />
+                      <img src={msg.imageUrl} className="max-w-[300px] max-h-[300px] object-contain rounded-lg" />
                     )}
 
                     {msg.videoUrl && (

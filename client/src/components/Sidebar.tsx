@@ -64,9 +64,9 @@ const Sidebar = () => {
 }, [socket, user?._id]);
 
   const handleLogout = () => {
-    dispatch(logout());
-    navigate("/email");
     localStorage.clear();
+    dispatch(logout());
+    navigate("/");
   };
 
   return (
@@ -126,7 +126,7 @@ const Sidebar = () => {
 
           {allUser.map(conv => (
             <NavLink
-              to={`/topic/${conv._id}`}
+              to={`/home/topic/${conv._id}`}
               key={conv._id}
               className='flex items-center gap-2 py-3 px-2 border border-transparent hover:border-primary rounded hover:bg-slate-100 cursor-pointer'
             >
