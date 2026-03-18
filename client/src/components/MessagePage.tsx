@@ -8,7 +8,7 @@ import { IoClose, IoSend } from "react-icons/io5";
 import { FiCheck, FiEdit2, FiMoreVertical, FiPlus, FiX } from "react-icons/fi";
 import uploadFile from "../helpers/uploadFile";
 import Loading from "./Loading";
-import backgroundImage from "../assets/wallapaper.jpeg";
+//import backgroundImage from "../assets/wallapaper.jpeg";
 import moment from "moment";
 import { useAppSelector } from "../redux/hooks";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -49,6 +49,7 @@ const MessagePage: React.FC = () => {
     videoUrl: "",
     fileUrl: "",
     fileName: "",
+    senderName: user?.name || "User",
   });
 
   const ai = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_AI_KEY);
@@ -124,6 +125,7 @@ const MessagePage: React.FC = () => {
     });
 
     socket.on("topic-messages", (msgs: IMessage[]) => {
+      console.log("Received messages:", msgs);
       setAllMessage(msgs);
     });
 
@@ -283,21 +285,34 @@ socket.on("message-updated", handleUpdatedMessage);
             </div>
 
             {msgs.map((msg) => (
-              <div className={`mb-3 flex ${
-    user?._id === msg.sender ? "justify-end" : "justify-start"
-  }`}>
-                {msg.isEdited && (
-  <span className="text-[10px] text-gray-500">Edited</span>
-)}
+              <div
+    key={msg._id}
+    className={`mb-3 flex flex-col ${
+      user?._id === msg.sender._id ? "items-end" : "items-start"
+    }`}
+  >
+    <div className="flex items-center gap-2 text-[11px] text-gray-500 mb-1 px-1">
+        
+        {/* Username */}
+        <span className="font-semibold text-gray-700">
+          {user?._id === msg.sender._id ? "" :msg.sender.name || "User"}
+        </span>
+
+        {/* Edited label */}
+        {msg.isEdited && (
+          <span className="text-gray-400 italic">Edited</span>
+        )}
+      </div>
+
               <div
                 key={msg._id}
                 className={`p-2 rounded max-w-[60%] rounded-lg px-3 py-2 ${
-                user?._id === msg.sender
+                user?._id === msg.sender._id
                   ? "bg-teal-100"
                   : "bg-gray-100"
               }`}
               >
-
+                 
                 {editingMsgId === msg._id ? (
                   <div className="border rounded-lg p-3 bg-white">
 

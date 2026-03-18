@@ -107,7 +107,9 @@ io.on('connection', async (socket) => {
 
     const messages = await MessageModel.find({
       conversationId: topicId
-    }).sort({ createdAt: 1 }).lean();
+    })
+    .populate({ path: 'sender', select: 'name profile_pic' }) // sender details
+    .sort({ createdAt: 1 }).lean();
 
     socket.emit("topic-messages", messages);
   });
