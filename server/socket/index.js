@@ -1,120 +1,118 @@
-const express = require('express')
-const { Server } = require('socket.io')
-const http = require('http')
-const getUserDetailsFromToken = require('../helpers/getUserDetailsFromToken')
-const { ConversationModel, MessageModel } = require('../models/ConversationModel')
+const express = require('express');
+const { Server } = require('socket.io');
+const http = require('http');
+const getUserDetailsFromToken = require('../helpers/getUserDetailsFromToken');
+const { ConversationModel, MessageModel } = require('../models/ConversationModel');
 
-const app = express()
+const app = express();
 
-/***socket connection */
-const server = http.createServer(app)
+const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL,
     credentials: true
   }
-})
-
-/***
- * socket running at http://localhost:8080/
- */
+});
 
 //online user
-const onlineUser = new Set()
+const onlineUser = new Set();
 
 io.on('connection', async (socket) => {
-  console.log("connect User 1", socket.id)
-  socket.onAny((event, ...args) => {
-    console.log("📩 Event received:", event, args);
-  });
-  const token = socket.handshake.auth.token
+  console.log("Connected:", socket.id);
 
-  //current user details 
-  //const user = await getUserDetailsFromToken(token)
+  socket.onAny((event, ...args) => {
+    console.log("Event:", event, args);
+  });
+
+  const token = socket.handshake.auth.token;
 
   let user;
   try {
     user = await getUserDetailsFromToken(token);
   } catch (err) {
-    console.error("Auth error:", err.message);
     socket.emit("auth_error", "Authentication failed");
     return socket.disconnect(true);
   }
 
   // HARD GUARD
   if (!user || !user._id) {
-    socket.emit("auth_error", "Invalid or expired token");
+    socket.emit("auth_error", "Invalid token");
     return socket.disconnect(true);
   }
 
+  const userId = user._id.toString();
+
   //create a room
-  socket.join(user?._id.toString())
-  onlineUser.add(user?._id?.toString())
+  socket.join(userId);
+  onlineUser.add(userId);
 
-  io.emit('onlineUser', Array.from(onlineUser))
+  io.emit('onlineUser', Array.from(onlineUser));
 
-  //sidebar
+  /* ================= SIDEBAR ================= */
   socket.on('sidebar', async (currentUserId) => {
-    console.log("sidebar - current user", currentUserId)
-
     try {
-      // Get all conversations for this user
       const conversations = await ConversationModel.find({
         participants: currentUserId,
         isArchived: false
       })
-        .populate('participants', 'name profile_pic') // participants details
+        .populate('participants', 'name profile_pic')
         .populate({
           path: 'lastMessage',
-          select: 'text imageUrl videoUrl createdAt sender',
-          populate: { path: 'sender', select: 'name profile_pic' } // sender details
+          select: 'text imageUrl videoUrl fileName createdAt sender',
+          populate: { path: 'sender', select: 'name profile_pic' }
         })
-        .sort({ updatedAt: -1 }); // latest updated first
+        .sort({ updatedAt: -1 });
 
-      // Format for frontend
       const formatted = conversations.map(conv => ({
         _id: conv._id,
         topic: conv.topic,
-        topicImage: '', // optional topic avatar
+        topicImage: "",
         lastMessage: conv.lastMessage,
         memberCount: conv.participants.length,
         unseenMsg: 0
-        // unseenMsg: conv.participants.reduce((count, p) => {
-        //   if (p._id.toString() !== userId.toString() && conv.lastMessage?.seenBy?.indexOf(userId) === -1) {
-        //     return count + 1;
-        //   }
-        //   return count;
-        // }, 0)
       }));
-      console.log("Conversations found:", conversations.length);
-      console.log("Formatted data:", formatted);
+
       socket.emit('conversation', formatted);
 
     } catch (err) {
-      console.error("Sidebar fetch error:", err.message);
+      console.error("Sidebar error:", err.message);
     }
+  });
 
-  })
+  /* ================= JOIN TOPIC ================= */
   socket.on("join-topic", async (topicId) => {
-    socket.join(topicId);
+    try {
+      socket.join(topicId);
 
-    const topic = await ConversationModel.findById(topicId);
-    console.log("Joined topic:", topicId, "Topic details:", topic);
-    socket.emit("topic-details", topic);
+      const topic = await ConversationModel.findById(topicId)
+        .populate("participants", "name profile_pic");
+
+      socket.emit("topic-details", topic);
+
+    } catch (err) {
+      console.error("Join topic error:", err);
+    }
   });
 
+  /* ================= LOAD MESSAGES ================= */
   socket.on("load-messages", async (topicId) => {
+    try {
+      const messages = await MessageModel.find({
+        conversationId: topicId
+      })
+        .populate("sender", "name profile_pic")
+        .sort({ createdAt: 1 })
+        .lean();
 
-    const messages = await MessageModel.find({
-      conversationId: topicId
-    })
-    .populate({ path: 'sender', select: 'name profile_pic' }) // sender details
-    .sort({ createdAt: 1 }).lean();
+      socket.emit("topic-messages", messages);
 
-    socket.emit("topic-messages", messages);
+    } catch (err) {
+      console.error("Load messages error:", err);
+    }
   });
 
-  /* ---------------- SEND MESSAGE ---------------- */
+  /* ================= SEND MESSAGE ================= */
   socket.on("send-topic-message", async (data) => {
     try {
       const {
@@ -144,74 +142,105 @@ io.on('connection', async (socket) => {
         "name profile_pic"
       );
 
-      await ConversationModel.updateOne(
-        { _id: topicId },
-        { $set: { lastMessage: savedMessage._id } }
+      //update last message
+      await ConversationModel.findByIdAndUpdate(
+        topicId,
+        { lastMessage: savedMessage._id }
       );
 
-      const updatedConversation = await ConversationModel.findById(topicId)
+      const conversation = await ConversationModel.findById(topicId)
+        .populate("participants", "name profile_pic")
         .populate({
           path: "lastMessage",
           select: "text imageUrl videoUrl fileName createdAt sender",
           populate: { path: "sender", select: "name profile_pic" }
         });
 
-      // send message to topic room
+      //send message to room
       io.to(topicId).emit("new-topic-message", populatedMessage);
 
       // update sidebar for all participants
-      updatedConversation.participants.forEach((participantId) => {
-        io.to(participantId.toString()).emit("sidebar-update", updatedConversation);
+      conversation.participants.forEach((p) => {
+        io.to(p._id.toString()).emit("sidebar-update", {
+          _id: conversation._id,
+          topic: conversation.topic,
+          topicImage: "",
+          lastMessage: conversation.lastMessage,
+          memberCount: conversation.participants.length,
+          unseenMsg: 0
+        });
       });
 
     } catch (error) {
       console.error("Send message error:", error);
     }
   });
+
+  /* ================= UPDATE MESSAGE ================= */
   socket.on("update-message", async (data) => {
     try {
+      const { messageId, text, imageUrl, videoUrl, fileUrl, fileName } = data;
 
-      const { messageId, text, topicId } = data; 
-      console.log("Update message request:", data);     
       const updatedMessage = await MessageModel.findByIdAndUpdate(
         messageId,
         {
-          text: text,
+          text,
           isEdited: true,
-          imageUrl: data.imageUrl,
-          videoUrl: data.videoUrl,
-          fileUrl: data.fileUrl,
-          fileName: data.fileName,
+          imageUrl,
+          videoUrl,
+          fileUrl,
+          fileName,
         },
         { new: true }
-      );
+      ).populate("sender", "name profile_pic");
 
       if (!updatedMessage) return;
 
-      // send updated message to topic room
-      io.to(updatedMessage.topicId).emit("message-updated", updatedMessage); 
+      const conversationId = updatedMessage.conversationId.toString();
 
-      // update sidebar
-      const topic = await TopicModel.findById(topicId);
+      //update last message
+      await ConversationModel.findByIdAndUpdate(
+        conversationId,
+        { lastMessage: updatedMessage._id }
+      );
 
-      io.emit("sidebar-update", {
-        topicId,
-        lastMessage: updatedMessage.text,
-        updatedAt: updatedMessage.updatedAt
+      const conversation = await ConversationModel.findById(conversationId)
+        .populate("participants", "name profile_pic")
+        .populate({
+          path: "lastMessage",
+          select: "text imageUrl videoUrl fileName createdAt sender",
+          populate: { path: "sender", select: "name profile_pic" }
+        });
+
+      //emit updated message
+      io.to(conversationId).emit("message-updated", updatedMessage);
+
+      //update sidebar for all users
+      conversation.participants.forEach((p) => {
+        io.to(p._id.toString()).emit("sidebar-update", {
+          _id: conversation._id,
+          topic: conversation.topic,
+          topicImage: "",
+          lastMessage: conversation.lastMessage,
+          memberCount: conversation.participants.length,
+          unseenMsg: 0
+        });
       });
 
     } catch (error) {
       console.log("Update Message Error:", error);
     }
   });
-  //disconnect
+
+  /* ================= DISCONNECT ================= */
   socket.on('disconnect', () => {
-    onlineUser.delete(user?._id?.toString())
-    console.log('disconnect user ', socket.id)
-  })
-})
+    onlineUser.delete(userId);
+    console.log("Disconnected:", socket.id);
+  });
+
+});
 
 module.exports = {
   app,
   server
-}
+};

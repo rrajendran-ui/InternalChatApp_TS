@@ -23,7 +23,7 @@ export interface IMessage {
   fileName?: string;  
   fileUrl?: string;
   seen: boolean;
-  sender: IUser | string;
+  sender: IUser;
   conversationId: string;
   createdAt: string;
   updatedAt: string;

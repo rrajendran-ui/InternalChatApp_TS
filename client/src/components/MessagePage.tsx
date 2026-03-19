@@ -1,14 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Avatar from "./Avatar";
 import { HiDotsVertical } from "react-icons/hi";
 import { FaAngleLeft } from "react-icons/fa";
 import { FaPlus, FaImage, FaVideo, FaPaperclip, FaUser } from "react-icons/fa6";
-import { IoClose, IoSend } from "react-icons/io5";
-import { FiCheck, FiEdit2, FiMoreVertical, FiPlus, FiX } from "react-icons/fi";
+import { IoSend } from "react-icons/io5";
+import { FiCheck, FiEdit2, FiMoreVertical, FiX } from "react-icons/fi";
 import uploadFile from "../helpers/uploadFile";
 import Loading from "./Loading";
-//import backgroundImage from "../assets/wallapaper.jpeg";
 import moment from "moment";
 import { useAppSelector } from "../redux/hooks";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -22,14 +21,16 @@ const MessagePage: React.FC = () => {
   const { topicId } = useParams<{ topicId?: string }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.user);
-
+  const isFirstLoad = useRef(true);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [existingAttachment, setExistingAttachment] = useState<any>(null);
   const [newAttachment, setNewAttachment] = useState<File | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
+  const [isScrolling, setIsScrolling] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [scrollPercent, setScrollPercent] = useState(0);
+  const scrollTimeout = useRef<any>(null);
   const [topicData, setTopicData] = useState<IConversationSummary>({
     _id: "",
     topic: "",
@@ -49,15 +50,43 @@ const MessagePage: React.FC = () => {
     videoUrl: "",
     fileUrl: "",
     fileName: "",
-    senderName: user?.name || "User",
   });
 
   const ai = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_AI_KEY);
+  const handleScroll = () => {
+  if (!bottomRef.current) return;
 
-  /* AUTO SCROLL */
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [allMessage]);
+  const { scrollTop, scrollHeight, clientHeight } = bottomRef.current;
+
+  // Calculate scroll percentage
+  const percent = scrollTop / (scrollHeight - clientHeight);
+  setScrollPercent(percent);
+
+  // Show scrollbar
+  setIsScrolling(true);
+
+  clearTimeout(scrollTimeout.current);
+  scrollTimeout.current = setTimeout(() => {
+    setIsScrolling(false);
+  }, 800);
+
+  // Your existing button logic
+  setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 100);
+};
+  /* AUTO SCROLL */ 
+ const bottomRef  = useRef<HTMLDivElement | null>(null);
+ useEffect(() => {
+  if (!bottomRef.current) return;
+
+  if (isFirstLoad.current) {
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      isFirstLoad.current = false;
+    }, 50);
+  } else {
+    bottomRef.current.scrollIntoView({ behavior: "smooth" });
+  }
+}, [allMessage]);
 
   const formatChatDate = (date: Date) => {
     if (isToday(date)) return "Today";
@@ -112,46 +141,62 @@ const MessagePage: React.FC = () => {
   /* SOCKET EVENTS */
 
   useEffect(() => {
-    if (!socket || !topicId) return;
+  if (!socket || !topicId) return;
 
-    setAllMessage([]);
+  console.log("Joining topic:", topicId);
+  isFirstLoad.current = true;  
+  // CLEAR OLD DATA
+  setAllMessage([]);
 
-    socket.emit("join-topic", topicId);
+  // JOIN ROOM
+  socket.emit("join-topic", topicId);
 
-    socket.on("topic-details", (topic: IConversationSummary) => {
-      topic.memberCount = topic.participants?.length || 0;
-      setTopicData(topic);
-      socket.emit("load-messages", topicId);
+  /* HANDLERS */
+
+  const handleTopicDetails = (topic: IConversationSummary) => {
+    topic.memberCount = topic.participants?.length || 0;
+    setTopicData(topic);
+
+    // LOAD MESSAGES AFTER JOIN
+    socket.emit("load-messages", topicId);
+  };
+
+  const handleTopicMessages = (msgs: IMessage[]) => {
+    setAllMessage(msgs);
+  };
+
+  const handleNewMessage = (msg: IMessage) => {
+    setAllMessage((prev) => {
+      if (prev.find((m) => m._id === msg._id)) return prev;
+      return [...prev, msg];
     });
+  };
 
-    socket.on("topic-messages", (msgs: IMessage[]) => {
-      console.log("Received messages:", msgs);
-      setAllMessage(msgs);
-    });
+  const handleUpdatedMessage = (updatedMsg: IMessage) => {
+    setAllMessage((prev) =>
+      prev.map((msg) =>
+        msg._id.toString() === updatedMsg._id.toString()
+          ? updatedMsg
+          : msg
+      )
+    );
+  };
 
-    socket.on("new-topic-message", (msg: IMessage) => {
-      setAllMessage((prev) => {
-        if (prev.find((m) => m._id === msg._id)) return prev;
-        return [...prev, msg];
-      });
-    });
+  /* REGISTER EVENTS */
+  socket.on("topic-details", handleTopicDetails);
+  socket.on("topic-messages", handleTopicMessages);
+  socket.on("new-topic-message", handleNewMessage);
+  socket.on("message-updated", handleUpdatedMessage);
 
-    const handleUpdatedMessage = (updatedMsg: IMessage) => {
-      setAllMessage((prev) =>
-    prev.map((msg) =>
-      msg._id === updatedMsg._id ? updatedMsg : msg
-    )
-  );
-};
+  /* CLEANUP */
+  return () => {
+    socket.off("topic-details", handleTopicDetails);
+    socket.off("topic-messages", handleTopicMessages);
+    socket.off("new-topic-message", handleNewMessage);
+    socket.off("message-updated", handleUpdatedMessage);
+  };
 
-socket.on("message-updated", handleUpdatedMessage);
-    return () => {
-      socket.off("topic-details");
-      socket.off("topic-messages");
-      socket.off("new-topic-message");
-      socket.off("message-updated");
-    };
-  }, [socket, topicId]);
+}, [socket, topicId]); 
 
   /* GET MESSAGE TEXT */
 
@@ -189,62 +234,54 @@ socket.on("message-updated", handleUpdatedMessage);
   /* EDIT MESSAGE */
 
   const handleEditMessage = async (msgId: string) => {
-  if (!socket) return; 
-  let imageUrl = existingAttachment?.type === "image" ? existingAttachment.url : "";
-  let videoUrl = existingAttachment?.type === "video" ? existingAttachment.url : "";
-  let fileUrl = existingAttachment?.type === "file" ? existingAttachment.url : "";
-  let fileName = existingAttachment?.name || "";
-    //console.log("Existing Attachment:", existingAttachment);
-    //console.log("New Attachment:", newAttachment?.type);
-    //console.log("message", message);
-  // If user uploaded new file
-  if (newAttachment) {
-    //const uploaded = await uploadFile(newAttachment);
-
-    if (newAttachment.type.startsWith("image")) {
-      imageUrl = message.imageUrl || "";
-      videoUrl = "";
-      fileUrl = "";
-      fileName = newAttachment.name
-    } 
-    else if (newAttachment.type.startsWith("video")) {
-      videoUrl = message.videoUrl;
-      imageUrl = "";
-      fileUrl = "";
-      fileName = newAttachment.name
-    } 
-    else {
-      fileUrl = message.fileUrl || "";
-      fileName = message.fileName || "";
-      imageUrl = "";
-      videoUrl = "";
+    if (!socket) return;
+    let imageUrl = existingAttachment?.type === "image" ? existingAttachment.url : "";
+    let videoUrl = existingAttachment?.type === "video" ? existingAttachment.url : "";
+    let fileUrl = existingAttachment?.type === "file" ? existingAttachment.url : "";
+    let fileName = existingAttachment?.name || "";
+    if (newAttachment) {
+      if (newAttachment.type.startsWith("image")) {
+        imageUrl = message.imageUrl || "";
+        videoUrl = "";
+        fileUrl = "";
+        fileName = newAttachment.name
+      }
+      else if (newAttachment.type.startsWith("video")) {
+        videoUrl = message.videoUrl;
+        imageUrl = "";
+        fileUrl = "";
+        fileName = newAttachment.name
+      }
+      else {
+        fileUrl = message.fileUrl || "";
+        fileName = message.fileName || "";
+        imageUrl = "";
+        videoUrl = "";
+      }
     }
-  }
-  //console.log("Final URLs:", { imageUrl, videoUrl, fileUrl, fileName });
-  socket.emit("update-message", {
-    messageId: msgId,
-    text: editText,
-    imageUrl,
-    videoUrl,
-    fileUrl,
-    fileName,
-  });
 
-  setEditingMsgId(null);
-  setEditText("");
-  setNewAttachment(null);
-  setExistingAttachment(null);
-};
- 
+    socket.emit("update-message", {
+      messageId: msgId,
+      text: editText,
+      imageUrl,
+      videoUrl,
+      fileUrl,
+      fileName,
+    });
+
+    setEditingMsgId(null);
+    setEditText("");
+    setNewAttachment(null);
+    setExistingAttachment(null);
+  };
+
   return (
     <div
-      
+
       className="bg-white h-screen flex flex-col"
     >
       {/* HEADER */}
-
       <header className="sticky top-0 h-16 bg-white flex justify-between items-center px-4">
-
         <div className="flex items-center gap-4">
           <Link to="/" className="lg:hidden">
             <FaAngleLeft size={22} />
@@ -275,10 +312,14 @@ socket.on("message-updated", handleUpdatedMessage);
 
       {/* MESSAGE AREA */}
 
-      <section className="h-[calc(100vh-128px)] overflow-y-auto p-3">
-
+      <section 
+  className="h-[calc(100vh-128px)] overflow-y-auto p-3 chat-scroll"
+>
         {Object.entries(groupedMessages).map(([date, msgs]) => (
-          <div key={date}>
+          <div key={date} ref={bottomRef} onScroll={handleScroll} onMouseEnter={() => setIsScrolling(true)}
+  onMouseLeave={() => setIsScrolling(false)} className={`${
+    isScrolling ? "scroll-visible" : "scroll-hidden"
+  }`}>
 
             <div className="text-center text-xs text-gray-400 my-4">
               {formatChatDate(new Date(date))}
@@ -286,213 +327,200 @@ socket.on("message-updated", handleUpdatedMessage);
 
             {msgs.map((msg) => (
               <div
-    key={msg._id}
-    className={`mb-3 flex flex-col ${
-      user?._id === msg.sender._id ? "items-end" : "items-start"
-    }`}
-  >
-    <div className="flex items-center gap-2 text-[11px] text-gray-500 mb-1 px-1">
-        
-        {/* Username */}
-        <span className="font-semibold text-gray-700">
-          {user?._id === msg.sender._id ? "" :msg.sender.name || "User"}
-        </span>
-
-        {/* Edited label */}
-        {msg.isEdited && (
-          <span className="text-gray-400 italic">Edited</span>
-        )}
-      </div>
-
-              <div
                 key={msg._id}
-                className={`p-2 rounded max-w-[60%] rounded-lg px-3 py-2 ${
-                user?._id === msg.sender._id
-                  ? "bg-teal-100"
-                  : "bg-gray-100"
-              }`}
+                className={`mb-3 flex flex-col group ${user?._id === (typeof msg.sender === "string" ? msg.sender : msg.sender._id) ? "items-end" : "items-start"
+                  }`}
               >
-                 
-                {editingMsgId === msg._id ? (
-                  <div className="border rounded-lg p-3 bg-white">
+                <div className="flex items-center gap-2 text-[11px] text-gray-500 mb-1 px-1">
 
-  {/* TEXT EDIT */}
-  <textarea
-    value={editText}
-    onChange={(e) => setEditText(e.target.value)}
-    className="w-full border rounded p-2 text-sm"
-  />
+                  {/* Username */}
+                  <span className="font-semibold text-gray-700">
+                    {user?._id === (typeof msg.sender === "string" ? msg.sender : msg.sender._id) ? "" : msg.sender.name || "User"}
+                  </span>
 
-  {/* EXISTING ATTACHMENT */}
-  {existingAttachment && !newAttachment && (
-    <div className="relative mt-3 w-fit">
+                  {/* Edited label */}
+                  {msg.isEdited && (
+                    <span className="text-gray-400 italic">Edited</span>
+                  )}
+                </div>
 
-      {existingAttachment.type === "image" && (
-        <img
-          src={existingAttachment.url}
-          className="h-28 rounded"
-        />
-      )}
+                <div
+                  key={msg._id}
+                  className={`relative group p-2 max-w-[60%] rounded-lg px-3 py-2 ${user?._id === (typeof msg.sender === "string" ? msg.sender : (typeof msg.sender === "string" ? msg.sender : msg.sender._id))
+                      ? "bg-teal-100"
+                      : "bg-gray-100"
+                    }`}
+                >
 
-      {existingAttachment.type === "video" && (
-        <video
-          src={existingAttachment.url}
-          controls
-          className="h-28 rounded"
-        />
-      )}
+                  {editingMsgId === msg._id ? (
+                    <div className="border rounded-lg p-3 bg-white">
 
-      {existingAttachment.type === "file" && (
-        <a
-          href={existingAttachment.url}
-          target="_blank"
-          className="text-blue-600 underline"
-        >
-          {existingAttachment.name}
-        </a>
-      )}
+                      {/* TEXT EDIT */}
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        className="w-full border rounded p-2 text-sm"
+                      />
 
-      <button
-        onClick={() => setExistingAttachment(null)}
-        className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2"
-      >
-        ✕
-      </button>
+                      {/* EXISTING ATTACHMENT */}
+                      {existingAttachment && !newAttachment && (
+                        <div className="relative mt-3 w-fit">
 
-    </div>
-  )}
+                          {existingAttachment.type === "image" && (
+                            <img
+                              src={existingAttachment.url}
+                              className="h-28 rounded"
+                            />
+                          )}
 
-  {/* NEW ATTACHMENT PREVIEW */}
-  {newAttachment && (
-    <div className="relative mt-3 w-fit">
+                          {existingAttachment.type === "video" && (
+                            <video
+                              src={existingAttachment.url}
+                              controls
+                              className="h-28 rounded"
+                            />
+                          )}
 
-      {newAttachment.type.startsWith("image") && (
-        <img
-          src={URL.createObjectURL(newAttachment)}
-          className="h-28 rounded"
-        />
-      )}
+                          {existingAttachment.type === "file" && (
+                            <a
+                              href={existingAttachment.url}
+                              target="_blank"
+                              className="text-blue-600 underline"
+                            >
+                              {existingAttachment.name}
+                            </a>
+                          )}
 
-      {newAttachment.type.startsWith("video") && (
-        <video
-          src={URL.createObjectURL(newAttachment)}
-          controls
-          className="h-28 rounded"
-        />
-      )}
+                          <button
+                            onClick={() => setExistingAttachment(null)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2"
+                          >
+                            ✕
+                          </button>
 
-      {!newAttachment.type.startsWith("image") &&
-        !newAttachment.type.startsWith("video") && (
-          <p className="text-sm">{newAttachment.name}</p>
-      )}
+                        </div>
+                      )}
+                      {newAttachment && (
+                        <div className="relative mt-3 w-fit">
 
-      <button
-        onClick={() => setNewAttachment(null)}
-        className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2"
-      >
-        ✕
-      </button>
+                          {newAttachment.type.startsWith("image") && (
+                            <img
+                              src={URL.createObjectURL(newAttachment)}
+                              className="h-28 rounded"
+                            />
+                          )}
 
-    </div>
-  )}
-  {/* ACTION BUTTONS */}
-  <div className="flex justify-end gap-3 mt-3">
-<label className="cursor-pointer text-sm flex items-center gap-1 text-gray-600">
-      <FaPaperclip />      
-      <input
-        type="file"
-        hidden
-        onChange={handleUploadImage}
-      />
-    </label>
-    <FiCheck
-      className="cursor-pointer text-green-600"
-      onClick={() => handleEditMessage(msg._id)}
-    />
+                          {newAttachment.type.startsWith("video") && (
+                            <video
+                              src={URL.createObjectURL(newAttachment)}
+                              controls
+                              className="h-28 rounded"
+                            />
+                          )}
 
-    <FiX
-      className="cursor-pointer text-gray-600"
-      onClick={() => setEditingMsgId(null)}
-    />
+                          {!newAttachment.type.startsWith("image") &&
+                            !newAttachment.type.startsWith("video") && (
+                              <p className="text-sm">{newAttachment.name}</p>
+                            )}
 
-  </div>
+                          <button
+                            onClick={() => setNewAttachment(null)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2"
+                          >
+                            ✕
+                          </button>
 
-</div>
-                ) : (
-                  <div>
-                    {msg.imageUrl && (
-                      <img src={msg.imageUrl} className="max-w-[300px] max-h-[300px] object-contain rounded-lg" />
-                    )}
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-3 mt-3">
+                        <label className="cursor-pointer text-sm flex items-center gap-1 text-gray-600">
+                          <FaPaperclip />
+                          <input
+                            type="file"
+                            hidden
+                            onChange={handleUploadImage}
+                          />
+                        </label>
+                        <FiCheck
+                          className="cursor-pointer text-green-600"
+                          onClick={() => handleEditMessage(msg._id)}
+                        />
+                        <FiX
+                          className="cursor-pointer text-gray-600"
+                          onClick={() => setEditingMsgId(null)}
+                        />
+                      </div>
 
-                    {msg.videoUrl && (
-                      <video src={msg.videoUrl} controls />
-                    )}
+                    </div>
+                  ) : (
+                    <div>
+                      {msg.imageUrl && (
+                        <img src={msg.imageUrl} className="max-w-[300px] max-h-[300px] object-contain rounded-lg" />
+                      )}
 
-                    {msg.fileUrl && (
-                      <a
-                        href={msg.fileUrl}
-                        target="_blank"
-                        className="text-blue-600 underline"
-                      >
-                        {msg.fileName}
-                      </a>
-                    )}
+                      {msg.videoUrl && (
+                        <video src={msg.videoUrl} controls />
+                      )}
 
-                    <Markdown remarkPlugins={[remarkGfm]}>
-                      {msg.text}
-                    </Markdown>
-                    
-                    <p className="text-xs text-right">
-                      {moment(msg.createdAt).format("hh:mm A")}
-                    </p>
+                      {msg.fileUrl && (
+                        <a
+                          href={msg.fileUrl}
+                          target="_blank"
+                          className="text-blue-600 underline"
+                        >
+                          {msg.fileName}
+                        </a>
+                      )}
 
-                  </div>
-                )}
+                      <Markdown remarkPlugins={[remarkGfm]}>
+                        {msg.text}
+                      </Markdown>
 
-                {user?._id === msg.sender && editingMsgId !== msg._id && (
-                  <div className="absolute top-[-15px] right-0 hidden group-hover:flex gap-2 bg-white shadow px-2 py-1 rounded">
+                      <p className="text-xs text-right">
+                        {moment(msg.createdAt).format("hh:mm A")}
+                      </p>
 
-                    <FiEdit2
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setEditingMsgId(msg._id);
-                        setEditText(msg.text);
-                        if (msg.imageUrl) {
-      setExistingAttachment({ type: "image", url: msg.imageUrl });
-    } else if (msg.videoUrl) {
-      setExistingAttachment({ type: "video", url: msg.videoUrl });
-    } else if (msg.fileUrl) {
-      setExistingAttachment({
-        type: "file",
-        url: msg.fileUrl,
-        name: msg.fileName,
-      });
-    }
-                      }}
-                    />
+                    </div>
+                  )}
 
-                    <FiMoreVertical />
+                  {user?._id === msg.sender._id && (
+                    <div className="absolute -top-6 right-1 hidden group-hover:flex gap-2 bg-white shadow-md px-2 py-1 rounded-lg z-10">
 
-                  </div>
-                )}
+                      <FiEdit2
+                        className="cursor-pointer"
+                        onClick={() => {
+                          setEditingMsgId(msg._id);
+                          setEditText(msg.text);
+                          if (msg.imageUrl) {
+                            setExistingAttachment({ type: "image", url: msg.imageUrl });
+                          } else if (msg.videoUrl) {
+                            setExistingAttachment({ type: "video", url: msg.videoUrl });
+                          } else if (msg.fileUrl) {
+                            setExistingAttachment({
+                              type: "file",
+                              url: msg.fileUrl,
+                              name: msg.fileName,
+                            });
+                          }
+                        }}
+                      />
 
+                      <FiMoreVertical />
+
+                    </div>
+                  )}
+
+                </div>
               </div>
-</div>
             ))}
 
           </div>
         ))}
-
-        <div ref={scrollRef}></div>
-
+ 
         {loading && <Loading />}
-
       </section>
 
-      {/* SEND MESSAGE */}
-
       <section className="h-16 bg-white flex items-center px-4">
-
         <button
           onClick={() =>
             setOpenImageVideoUpload((prev) => !prev)
@@ -504,44 +532,34 @@ socket.on("message-updated", handleUpdatedMessage);
 
         {openImageVideoUpload && (
           <div className="absolute bottom-16 bg-white shadow rounded w-36 p-2">
-
             <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
               <FaImage /> Image
               <input type="file" hidden onChange={handleUploadImage} />
             </label>
-
             <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
               <FaVideo /> Video
               <input type="file" hidden onChange={handleUploadVideo} />
             </label>
-
             <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
               <FaPaperclip /> File
               <input type="file" hidden onChange={handleUploadImage} />
             </label>
-
           </div>
         )}
-
         <form
           onSubmit={handleSendMessage}
           className="flex gap-2 w-full ml-2"
         >
-
           <div
             ref={editorRef}
             contentEditable
             className="flex-1 border rounded-xl px-3 py-2"
           />
-
           <button className="text-primary">
             <IoSend size={26} />
           </button>
-
         </form>
-
       </section>
-
     </div>
   );
 };
