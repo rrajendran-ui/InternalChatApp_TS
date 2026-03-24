@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect,  useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Avatar from "./Avatar";
 import { HiDotsVertical } from "react-icons/hi";
@@ -10,7 +10,7 @@ import uploadFile from "../helpers/uploadFile";
 import Loading from "./Loading";
 import moment from "moment";
 import { useAppSelector } from "../redux/hooks";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import type { IMessage, IConversationSummary } from "../redux/types";
 import { useSocket } from "../context/SocketContext";
 import Markdown from "react-markdown";
@@ -28,8 +28,8 @@ const MessagePage: React.FC = () => {
   const [newAttachment, setNewAttachment] = useState<File | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [scrollPercent, setScrollPercent] = useState(0);
+  //const [showScrollBtn, setShowScrollBtn] = useState(false);
+  //const [scrollPercent, setScrollPercent] = useState(0);
   const scrollTimeout = useRef<any>(null);
   const [topicData, setTopicData] = useState<IConversationSummary>({
     _id: "",
@@ -52,15 +52,9 @@ const MessagePage: React.FC = () => {
     fileName: "",
   });
 
-  const ai = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_AI_KEY);
+  const ai= new GoogleGenAI({ apiKey: "AIzaSyCUayp3te9fNVOqBt2SKjyuQtASiun26YA" });
   const handleScroll = () => {
   if (!bottomRef.current) return;
-
-  const { scrollTop, scrollHeight, clientHeight } = bottomRef.current;
-
-  // Calculate scroll percentage
-  const percent = scrollTop / (scrollHeight - clientHeight);
-  setScrollPercent(percent);
 
   // Show scrollbar
   setIsScrolling(true);
@@ -71,7 +65,7 @@ const MessagePage: React.FC = () => {
   }, 800);
 
   // Your existing button logic
-  setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 100);
+  //setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 100);
 };
   /* AUTO SCROLL */ 
  const bottomRef  = useRef<HTMLDivElement | null>(null);
@@ -229,8 +223,38 @@ const MessagePage: React.FC = () => {
     if (editorRef.current) editorRef.current.innerHTML = "";
 
     setMessage({});
+    if (allMessage.length === 1 || textValue.includes("@ai")) {
+        let msg = textValue.replace("@ai", "").trim()
+        getAiRespoonse(msg)
+      }
   };
-
+const getAiRespoonse = async (userMessage: string) => {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: userMessage,
+      });
+      if (!socket || !topicId) return;
+      socket.emit("send-topic-message", {
+      topicId,
+      sender: user?._id,
+      text: response.text,
+      imageUrl: message.imageUrl,
+      videoUrl: "",
+      fileUrl: "",
+      fileName: "",
+    });
+      setMessage({
+        text: "",
+        imageUrl: "",
+        videoUrl: "",
+        fileUrl: "",
+        fileName: ""
+      })
+    } catch (error) {
+      // alert(error.message)
+    }
+  }
   /* EDIT MESSAGE */
 
   const handleEditMessage = async (msgId: string) => {
@@ -353,7 +377,7 @@ const MessagePage: React.FC = () => {
                 >
 
                   {editingMsgId === msg._id ? (
-                    <div className="border rounded-lg p-3 bg-white">
+                    <div className="border rounded-lg p-3 bg-white w-[700px]">
 
                       {/* TEXT EDIT */}
                       <textarea
