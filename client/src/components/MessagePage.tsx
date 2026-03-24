@@ -16,21 +16,23 @@ import { useSocket } from "../context/SocketContext";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { format, isToday, isYesterday } from "date-fns";
-
+import { setAllUsers } from "../redux/userSlice";
+import axios from 'axios';
+import { useAppDispatch } from '../redux/hooks';
+import { toast } from "react-hot-toast";
 const MessagePage: React.FC = () => {
   const { topicId } = useParams<{ topicId?: string }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.user);
-  const isFirstLoad = useRef(true);
+  const isFirstLoad = useRef(true); 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [existingAttachment, setExistingAttachment] = useState<any>(null);
   const [newAttachment, setNewAttachment] = useState<File | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  //const [showScrollBtn, setShowScrollBtn] = useState(false);
-  //const [scrollPercent, setScrollPercent] = useState(0);
   const scrollTimeout = useRef<any>(null);
+  const dispatch = useAppDispatch();
   const [topicData, setTopicData] = useState<IConversationSummary>({
     _id: "",
     topic: "",
@@ -39,11 +41,17 @@ const MessagePage: React.FC = () => {
     unseenMsg: 0,
     memberCount: 0,
   });
-
+interface User {
+    _id: string;
+    name: string;
+    email: string;
+    profile_pic: string;
+}
   const [openImageVideoUpload, setOpenImageVideoUpload] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [openAddMemberModal, setOpenAddMemberModal] = useState(false);
   const [allMessage, setAllMessage] = useState<IMessage[]>([]);
-
+  const [selectedUsers, setSelectedUsers] = useState<User[]>([user as User]); 
   const [message, setMessage] = useState<Partial<IMessage>>({
     text: "",
     imageUrl: "",
@@ -53,6 +61,7 @@ const MessagePage: React.FC = () => {
   });
 
   const ai= new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_AI_KEY });
+  const allUsers = useAppSelector((state) => state.user.allUsers); 
   const handleScroll = () => {
   if (!bottomRef.current) return;
 
@@ -108,8 +117,7 @@ const MessagePage: React.FC = () => {
 
     setLoading(true);
     const uploadUrl = await uploadFile(file);
-    setLoading(false);
-    console.log("Upload URL:", uploadUrl);
+    setLoading(false); 
     if (file.type.startsWith("image/")) {
       setMessage((prev) => ({ ...prev, imageUrl: uploadUrl.url }));
     } else {
@@ -135,9 +143,7 @@ const MessagePage: React.FC = () => {
   /* SOCKET EVENTS */
 
   useEffect(() => {
-  if (!socket || !topicId) return;
-
-  console.log("Joining topic:", topicId);
+  if (!socket || !topicId) return; 
   isFirstLoad.current = true;  
   // CLEAR OLD DATA
   setAllMessage([]);
@@ -175,7 +181,10 @@ const MessagePage: React.FC = () => {
       )
     );
   };
-
+  socket.emit("add-members-to-topic", {
+  topicId,
+  members: selectedUsers,
+  });
   /* REGISTER EVENTS */
   socket.on("topic-details", handleTopicDetails);
   socket.on("topic-messages", handleTopicMessages);
@@ -299,6 +308,64 @@ const getAiRespoonse = async (userMessage: string) => {
     setExistingAttachment(null);
   };
 
+const handleSelectUser = (userId: string, checked: boolean) => { 
+  if (checked) {
+    setSelectedUsers((prev) => [...prev, user]);
+  } else {
+    setSelectedUsers((prev) =>
+      prev.filter((u) => u._id !== userId)
+    );
+  }
+  console.log(allUsers);
+console.log(existingUserIds);
+console.log(selectedUsers);
+};
+const handleAddMembers = async () => {
+  if (!socket || !topicId) return; 
+  const participantIds = selectedUsers
+        .map(u => u._id)
+        .filter(id => id && id.length === 24);
+
+    if (participantIds.length < 2) {
+        toast.error("Select at least one user to create group");
+        return;
+    } 
+    try {
+        await axios.put(
+          `${import.meta.env.VITE_API_URL}/api/conversations/${topicId}/add-members`,
+          {
+            members: participantIds, // new users to add
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+        toast.success("Group Members Updated!");
+        //onClose();
+    } catch (err: any) {
+        toast.error(err?.response?.data?.message || "Failed to create group");
+    }
+
+  setOpenAddMemberModal(false);
+  setSelectedUsers([]);
+};
+const handleOpenAddMember = async () => {
+  setOpenAddMemberModal(true);
+
+  if (allUsers.length === 0) {
+    const res = await axios.post(
+      `${import.meta.env.VITE_API_URL}/api/search-user`,      
+      { search: "" } 
+    ); 
+    dispatch(setAllUsers(res.data.data));
+  }
+};
+const existingUserIds =
+  topicData.participants?.map((p: any) =>
+    typeof p === "string" ? p : p._id
+  ) || [];
   return (
     <div
 
@@ -324,7 +391,7 @@ const getAiRespoonse = async (userMessage: string) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-gray-500">
+        <div className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-500 cursor-pointer" onClick={handleOpenAddMember}>
           <FaUser size={12} />
           <span className="font-bold text-[11px]">
             +{topicData.memberCount}
@@ -584,7 +651,45 @@ const getAiRespoonse = async (userMessage: string) => {
           </button>
         </form>
       </section>
+
+      {openAddMemberModal && (
+  <div className="fixed inset-0 bg-black/30 flex justify-center items-center">
+    <div className="bg-white p-4 rounded w-[200px] mb-[460px] ml-[560px]">
+      <FiX
+        className="absolute top-3 right-3 cursor-pointer text-gray-600 hover:text-black mr-[470px] mt-[55px]"
+        size={20}
+        onClick={() => setOpenAddMemberModal(false)}
+      />
+      <h3 className="font-semibold mb-3">Add Members</h3>
+
+      {/* User list */}
+      {allUsers.map((u) => {
+  const isExisting = existingUserIds.includes(u._id);
+
+  return (
+        <div key={u._id} className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          disabled={isExisting} 
+          checked={isExisting ||existingUserIds.includes(u._id)}
+          onChange={(e) => handleSelectUser(u._id, e.target.checked)}
+          className={isExisting ? "text-gray-400" : "cursor-pointer"}
+      />
+          <span className={isExisting ? "text-gray-400" : "cursor-pointer"}>{u.name}</span>
+        </div>
+       );
+})}
+
+      <button
+        onClick={handleAddMembers}
+        className="mt-4 bg-teal-500 text-white px-4 py-2 rounded"
+      >
+        Add
+      </button>
     </div>
+  </div>
+)}
+    </div>    
   );
 };
 

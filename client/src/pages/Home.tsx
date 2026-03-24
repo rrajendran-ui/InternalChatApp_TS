@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { useDispatch } from 'react-redux'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout, setOnlineUser, setUser } from '../redux/userSlice'
-import { useAppSelector } from '../redux/hooks'
+//import { useAppSelector } from '../redux/hooks'
 import Sidebar from '../components/Sidebar'
 import logo from '../assets/logo.png'
 //import io from 'socket.io-client'
@@ -11,13 +11,12 @@ import { useSocket } from "../context/SocketContext";
 
 
 const Home = () => {
-  const user = useAppSelector(state => state.user)
+  //const user = useAppSelector(state => state.user)
   const { socket } = useSocket();
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
-
-  console.log('user',user)
+ 
   const fetchUserDetails = async () => {
   try {
     const URL = `${import.meta.env.VITE_API_URL}/api/user-details`
@@ -25,8 +24,7 @@ const Home = () => {
     const response = await axios({
       url: URL,
       withCredentials: true
-    })
-console.log('response',response?.data?.data)
+    }) 
     const userData = response?.data?.data
 
     if (!userData) {
@@ -50,8 +48,7 @@ console.log('response',response?.data?.data)
   },[])
 
   /***socket connection */
-  useEffect(() => {
-    console.log("Home component - useEffect for socket connection. Socket:", socket);
+  useEffect(() => { 
   if (!socket) return
 
   const handleOnlineUsers = (data: string[]) => {

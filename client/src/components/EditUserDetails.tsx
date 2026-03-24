@@ -14,7 +14,7 @@ const EditUserDetails = ({onClose,user}) => {
         name : user?.user,
         profile_pic : user?.profile_pic
     })
-    const uploadPhotoRef = useRef()
+    const uploadPhotoRef = useRef<HTMLInputElement | null>(null);
     const dispatch = useDispatch()
 
     useEffect(()=>{
@@ -26,7 +26,7 @@ const EditUserDetails = ({onClose,user}) => {
         })
     },[user])
 
-    const handleOnChange = (e)=>{
+    const handleOnChange = (e: { target: { name: any; value: any } })=>{
         const { name, value } = e.target
 
         setData((preve)=>{
@@ -37,11 +37,11 @@ const EditUserDetails = ({onClose,user}) => {
         })
     }
 
-    const handleOpenUploadPhoto = (e)=>{
+    const handleOpenUploadPhoto = (e: { preventDefault: () => void; stopPropagation: () => void })=>{
         e.preventDefault()
         e.stopPropagation()
 
-        uploadPhotoRef.current.click()
+        uploadPhotoRef.current?.click()
     }
     const handleUploadPhoto = async(e)=>{
         const file = e.target.files[0]
@@ -56,7 +56,7 @@ const EditUserDetails = ({onClose,user}) => {
         })
     }
 
-    const handleSubmit = async(e)=>{
+    const handleSubmit = async(e: { preventDefault: () => void; stopPropagation: () => void })=>{
         e.preventDefault()
         e.stopPropagation()
         try {
@@ -69,7 +69,6 @@ const EditUserDetails = ({onClose,user}) => {
                 withCredentials : true
             })
 
-            console.log('response',response)
             taost.success(response?.data?.message)
             
             if(response.data.success){
@@ -79,7 +78,7 @@ const EditUserDetails = ({onClose,user}) => {
          
         } catch (error) {
             console.log(error)
-            taost.error()
+            taost.error("Failed to update user details")
         }
     }
   return (
@@ -107,6 +106,7 @@ const EditUserDetails = ({onClose,user}) => {
                         <Avatar
                             width={40}
                             height={40}
+                            userId=''
                             imageUrl={data?.profile_pic}
                             name={data?.name}
                         />

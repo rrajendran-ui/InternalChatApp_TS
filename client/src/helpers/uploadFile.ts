@@ -17,8 +17,7 @@ url = `${url}${fileType}/upload`;
         method : 'post',
         body : formData
     })
-    const responseData = await response.json()
-    console.log(responseData)
+    const responseData = await response.json() 
     return responseData
 }
 

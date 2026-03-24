@@ -9,7 +9,7 @@ import Avatar from './Avatar';
 import EditUserDetails from './EditUserDetails';
 import { FiArrowUpLeft } from "react-icons/fi";
 import SearchUser from './SearchUser'; 
-import { logout } from '../redux/userSlice';
+import { logout} from '../redux/userSlice';
 import type { IConversationSummary } from "../redux/types";
 import { useSocket } from "../context/SocketContext";
 
@@ -18,7 +18,6 @@ const Sidebar = () => {
   const { socket } = useSocket();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-
   const [allUser, setAllUser] = useState<IConversationSummary[]>([]);
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [openSearchUser, setOpenSearchUser] = useState(false);

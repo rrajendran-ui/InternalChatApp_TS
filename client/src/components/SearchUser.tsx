@@ -4,6 +4,8 @@ import Loading from './Loading';
 import UserSearchCard from './UserSearchCard';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+//import {setAllUsers } from '../redux/userSlice';
+//import { useAppDispatch } from '../redux/hooks';
 
 /* ================= TYPES ================= */
 
@@ -28,6 +30,7 @@ const SearchUser: React.FC<SearchUserProps> = ({ onClose, currentUser }) => {
     const [searchUser, setSearchUser] = useState<User[]>([]);
     const [selectedUsers, setSelectedUsers] = useState<User[]>([currentUser]); 
     const [loading, setLoading] = useState<boolean>(false);
+    //const dispatch = useAppDispatch();
 
     /* ================= SEARCH USERS ================= */
 
@@ -46,7 +49,7 @@ const SearchUser: React.FC<SearchUserProps> = ({ onClose, currentUser }) => {
                     { search }
                 );
 
-                setSearchUser(res.data.data as User[]);
+                setSearchUser(res.data.data as User[]); 
             } catch (err: any) {
                 toast.error(err?.response?.data?.message || "Search failed");
             } finally {

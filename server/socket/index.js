@@ -231,7 +231,23 @@ io.on('connection', async (socket) => {
       console.log("Update Message Error:", error);
     }
   });
+  socket.on("add-members-to-topic", async ({ topicId, members }) => {
+  try {
+    const updatedConversation = await ConversationModel.findByIdAndUpdate(
+      topicId,
+      {
+        $addToSet: {
+          participants: { $each: members }
+        }
+      },
+      { new: true }
+    ).populate("participants", "name profile_pic");
 
+    io.to(topicId).emit("topic-details", updatedConversation);
+  } catch (err) {
+    console.error("Add members error:", err);
+  }
+});
   /* ================= DISCONNECT ================= */
   socket.on('disconnect', () => {
     onlineUser.delete(userId);

@@ -37,8 +37,7 @@ async function createConversation(req, res) {
       return res.status(400).json({ message: "Invalid participants" });
     }
 
-    /* ================= VERIFY USERS EXIST ================= */
-    console.log("1");
+    /* ================= VERIFY USERS EXIST ================= */ 
     const users = await User.find({
       _id: { $in: uniqueParticipants }
     });
@@ -72,5 +71,42 @@ async function createConversation(req, res) {
     });
   }
 }
+const addMembersToConversation = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { members } = req.body;
 
-module.exports = createConversation;
+    const conversation = await ConversationModel.findById(id);
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const updatedParticipants = [
+      ...new Set([
+        ...conversation.participants.map((p) => p.toString()),
+        ...members,
+      ]),
+    ];
+
+    conversation.participants = updatedParticipants;
+
+    await ConversationModel.findByIdAndUpdate(
+    id,
+    {
+      $addToSet: {
+        participants: { $each: updatedParticipants } // avoids duplicates
+      }
+    },
+    { new: true }
+  );
+
+    res.json({
+      success: true,      
+      data: conversation,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to add members" });
+  }
+};
+module.exports = { createConversation, addMembersToConversation };

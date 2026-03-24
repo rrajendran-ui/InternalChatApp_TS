@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { IoClose } from "react-icons/io5";
 import { Link, useNavigate } from 'react-router-dom';
 import uploadFile from '../helpers/uploadFile.js';
@@ -43,7 +43,7 @@ const RegisterPage = () => {
   const handleClearUploadPhoto = (e)=>{
     e.stopPropagation()
     e.preventDefault()
-    setUploadPhoto(null)
+    setUploadPhoto("")
   }
 
   const handleSubmit = async(e)=>{
@@ -53,8 +53,7 @@ const RegisterPage = () => {
     const URL = `${import.meta.env.VITE_API_URL}/api/register`
 
     try {
-        const response = await axios.post(URL,data)
-        console.log("response",response)
+        const response = await axios.post(URL,data) 
 
         toast.success(response.data.message)
 
@@ -70,11 +69,9 @@ const RegisterPage = () => {
 
         }
     } catch (error) {
-        toast.error(error?.response?.data?.message)
-    }
-    console.log('data',data)
+        toast.error(error?.response?.data?.message || "Something went wrong")
+    } 
   }
-
 
   return (
     <div className='mt-5'>

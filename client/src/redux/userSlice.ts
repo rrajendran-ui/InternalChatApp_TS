@@ -9,7 +9,11 @@ interface UserState {
   token: string
   onlineUser: string[]
 }
-
+interface UserState {
+  user: any;
+  allUsers: any[];
+}
+ 
 const storedToken = localStorage.getItem("token");
 
 const initialState: UserState = {
@@ -19,6 +23,8 @@ const initialState: UserState = {
   profile_pic: "",
   token: storedToken || "",
   onlineUser: [],
+  user: null,
+  allUsers: [],
 };
 
 export const userSlice = createSlice({
@@ -47,13 +53,17 @@ export const userSlice = createSlice({
     setOnlineUser : (state,action)=>{
       state.onlineUser = action.payload
     },
+    setAllUsers: (state, action) => {
+      state.allUsers = action.payload;
+    },
     // setSocketConnection : (state, action: { payload: Socket | null })=>{
     //   state.socketConnection = action.payload as any
     // }
   },
+  
 })
 
 // Action creators are generated for each case reducer function
-export const { setUser, setToken ,logout, setOnlineUser } = userSlice.actions
+export const { setUser, setToken ,logout, setOnlineUser, setAllUsers } = userSlice.actions
 
 export default userSlice.reducer

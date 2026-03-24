@@ -27,8 +27,7 @@ export const SocketProvider: React.FC<Props> = ({ children }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
-    console.log("Token:", token);
+  useEffect(() => { 
     if (!token?.trim()) return;
     const socketInstance = io(`${import.meta.env.VITE_API_URL}`, {
       transports: ["websocket"],
