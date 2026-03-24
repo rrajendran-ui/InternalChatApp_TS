@@ -52,7 +52,7 @@ const MessagePage: React.FC = () => {
     fileName: "",
   });
 
-  const ai= new GoogleGenAI({ apiKey: "AIzaSyCUayp3te9fNVOqBt2SKjyuQtASiun26YA" });
+  const ai= new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_AI_KEY });
   const handleScroll = () => {
   if (!bottomRef.current) return;
 
