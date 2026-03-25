@@ -51,7 +51,10 @@ interface User {
   const [loading, setLoading] = useState(false);
   const [openAddMemberModal, setOpenAddMemberModal] = useState(false);
   const [allMessage, setAllMessage] = useState<IMessage[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<User[]>([user as User]); 
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]); 
+  const allUsers = useAppSelector((state) => state.user.allUsers); 
+  const [search, setSearch] = useState("");
+  const [filteredUsers, setFilteredUsers] = useState(allUsers);
   const [message, setMessage] = useState<Partial<IMessage>>({
     text: "",
     imageUrl: "",
@@ -61,7 +64,6 @@ interface User {
   });
 
   const ai= new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_AI_KEY });
-  const allUsers = useAppSelector((state) => state.user.allUsers); 
   const handleScroll = () => {
   if (!bottomRef.current) return;
 
@@ -90,7 +92,16 @@ interface User {
     bottomRef.current.scrollIntoView({ behavior: "smooth" });
   }
 }, [allMessage]);
-
+useEffect(() => {
+  if (!search.trim()) {
+    setFilteredUsers(allUsers);
+  } else {
+    const filtered = allUsers.filter((u) =>
+      u.name.toLowerCase().includes(search.toLowerCase())
+    );
+    setFilteredUsers(filtered);
+  }
+}, [search, allUsers]);
   const formatChatDate = (date: Date) => {
     if (isToday(date)) return "Today";
     if (isYesterday(date)) return "Yesterday";
@@ -309,24 +320,25 @@ const getAiRespoonse = async (userMessage: string) => {
   };
 
 const handleSelectUser = (userId: string, checked: boolean) => { 
-  if (checked) {
-    setSelectedUsers((prev) => [...prev, user]);
-  } else {
-    setSelectedUsers((prev) =>
-      prev.filter((u) => u._id !== userId)
-    );
-  }
+  setSelectedUsers((prev) => {
+    const set = new Set(prev);
+
+    if (checked) set.add(userId);
+    else set.delete(userId);
+
+    return Array.from(set);
+  });
   console.log(allUsers);
 console.log(existingUserIds);
 console.log(selectedUsers);
 };
 const handleAddMembers = async () => {
   if (!socket || !topicId) return; 
-  const participantIds = selectedUsers
-        .map(u => u._id)
-        .filter(id => id && id.length === 24);
+  // const participantIds = selectedUsers
+  //       .map(u => u._id)
+  //       .filter(id => id && id.length === 24);
 
-    if (participantIds.length < 2) {
+    if (selectedUsers.length < 2) {
         toast.error("Select at least one user to create group");
         return;
     } 
@@ -334,7 +346,7 @@ const handleAddMembers = async () => {
         await axios.put(
           `${import.meta.env.VITE_API_URL}/api/conversations/${topicId}/add-members`,
           {
-            members: participantIds, // new users to add
+            members: selectedUsers, // new users to add
           },
           {
             headers: {
@@ -367,9 +379,7 @@ const existingUserIds =
     typeof p === "string" ? p : p._id
   ) || [];
   return (
-    <div
-
-      className="bg-white h-screen flex flex-col"
+    <div className="bg-white h-screen flex flex-col"
     >
       {/* HEADER */}
       <header className="sticky top-0 h-16 bg-white flex justify-between items-center px-4">
@@ -653,39 +663,98 @@ const existingUserIds =
       </section>
 
       {openAddMemberModal && (
-  <div className="fixed inset-0 bg-black/30 flex justify-center items-center">
-    <div className="bg-white p-4 rounded w-[200px] mb-[460px] ml-[560px]">
-      <FiX
-        className="absolute top-3 right-3 cursor-pointer text-gray-600 hover:text-black mr-[470px] mt-[55px]"
-        size={20}
-        onClick={() => setOpenAddMemberModal(false)}
-      />
-      <h3 className="font-semibold mb-3">Add Members</h3>
+  <div className="fixed inset-0 bg-black/30 flex justify-center items-center z-50">
+    
+    <div className="bg-white w-[420px] rounded-lg shadow-lg flex flex-col max-h-[500px]">
 
-      {/* User list */}
-      {allUsers.map((u) => {
-  const isExisting = existingUserIds.includes(u._id);
+      {/* HEADER */}
+      <div className="flex justify-between items-center p-4 border-b">
+        <h3 className="font-semibold text-lg">Add People</h3>
+        <button
+          onClick={() => setOpenAddMemberModal(false)}
+          className="text-gray-500 hover:text-black text-lg"
+        >
+          ✕
+        </button>
+      </div>
 
-  return (
-        <div key={u._id} className="flex items-center gap-2">
+      {/* SEARCH */}
+      <div className="p-3 border-b">
         <input
-          type="checkbox"
-          disabled={isExisting} 
-          checked={isExisting ||existingUserIds.includes(u._id)}
-          onChange={(e) => handleSelectUser(u._id, e.target.checked)}
-          className={isExisting ? "text-gray-400" : "cursor-pointer"}
-      />
-          <span className={isExisting ? "text-gray-400" : "cursor-pointer"}>{u.name}</span>
-        </div>
-       );
-})}
+          type="text"
+          placeholder="Search People"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
 
-      <button
-        onClick={handleAddMembers}
-        className="mt-4 bg-teal-500 text-white px-4 py-2 rounded"
-      >
-        Add
-      </button>
+      {/* USER LIST */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {filteredUsers.map((u) => {
+          const isExisting = existingUserIds.includes(u._id);
+
+          return (
+            <label
+              key={u._id}
+              className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-100 ${
+                isExisting ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              <input
+                type="checkbox"
+                disabled={isExisting}
+                checked={selectedUsers.includes(u._id)}
+                onChange={(e) =>
+                  handleSelectUser(u._id, e.target.checked)
+                }
+              />
+
+              {/* Avatar */}
+              <div className="w-8 h-8 rounded-full bg-gray-300 overflow-hidden">
+                {u.profile_pic ? (
+                  <img
+                    src={u.profile_pic}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-sm">
+                    {u.name?.charAt(0)}
+                  </div>
+                )}
+              </div>
+
+              {/* Name */}
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">{u.name}</span>
+                {isExisting && (
+                  <span className="text-xs text-gray-400">
+                    Already added
+                  </span>
+                )}
+              </div>
+            </label>
+          );
+        })}
+      </div>
+
+      {/* FOOTER */}
+      <div className="flex justify-end gap-2 p-3 border-t">
+        <button
+          onClick={() => setOpenAddMemberModal(false)}
+          className="px-4 py-2 rounded border text-gray-600"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={handleAddMembers}
+          disabled={selectedUsers.length === 0}
+          className="px-4 py-2 rounded bg-blue-600 text-white disabled:bg-gray-300"
+        >
+          Add
+        </button>
+      </div>
     </div>
   </div>
 )}
