@@ -3,7 +3,8 @@ const { Server } = require('socket.io');
 const http = require('http');
 const getUserDetailsFromToken = require('../helpers/getUserDetailsFromToken');
 const { ConversationModel, MessageModel } = require('../models/ConversationModel');
-
+//const UserModel = require("../models/UserModel")
+//const bcryptjs = require('bcryptjs')
 const app = express();
 
 const server = http.createServer(app);
@@ -17,16 +18,24 @@ const io = new Server(server, {
 
 //online user
 const onlineUser = new Set();
-
+const users = [
+  { email: "test@gmail.com", password: "$2b$10$123456" } // mock DB
+];
+const otpStore = {}; // { email: otp }
 io.on('connection', async (socket) => {
+  console.log('step 2');
   console.log("Connected:", socket.id);
-
+//forgotPasswordSocket(socket);
   socket.onAny((event, ...args) => {
     console.log("Event:", event, args);
   });
 
   const token = socket.handshake.auth.token;
-
+  console.log("Received token:", token);
+if (!token) {
+    console.log("No token → only public events available");
+    //return; 
+  }
   let user;
   try {
     user = await getUserDetailsFromToken(token);
@@ -52,6 +61,7 @@ io.on('connection', async (socket) => {
   /* ================= SIDEBAR ================= */
   socket.on('sidebar', async (currentUserId) => {
     try {
+      console.log('step 3');
       const conversations = await ConversationModel.find({
         participants: currentUserId,
         isArchived: false
@@ -248,6 +258,7 @@ io.on('connection', async (socket) => {
     console.error("Add members error:", err);
   }
 });
+
   /* ================= DISCONNECT ================= */
   socket.on('disconnect', () => {
     onlineUser.delete(userId);
@@ -255,7 +266,7 @@ io.on('connection', async (socket) => {
   });
 
 });
-
+  
 module.exports = {
   app,
   server

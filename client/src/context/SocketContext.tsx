@@ -40,6 +40,7 @@ export const SocketProvider: React.FC<Props> = ({ children }) => {
     setSocket(socketInstance);
 
     socketInstance.on("connect", () => {
+      console.log('step 1');
       setIsConnected(true);
       console.log("✅ Socket connected:", socketInstance.id);
     });

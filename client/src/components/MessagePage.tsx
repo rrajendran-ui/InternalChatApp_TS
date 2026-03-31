@@ -1,11 +1,11 @@
-import React, { useEffect,  useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Avatar from "./Avatar";
 import { HiDotsVertical } from "react-icons/hi";
 import { FaAngleLeft } from "react-icons/fa";
 import { FaPlus, FaImage, FaVideo, FaPaperclip, FaUser } from "react-icons/fa6";
 import { IoSend } from "react-icons/io5";
-import { FiCheck, FiEdit2, FiMoreVertical, FiX } from "react-icons/fi";
+import { FiCheck, FiEdit2, FiMoreVertical, FiX,FiPlus } from "react-icons/fi";
 import uploadFile from "../helpers/uploadFile";
 import Loading from "./Loading";
 import moment from "moment";
@@ -24,7 +24,7 @@ const MessagePage: React.FC = () => {
   const { topicId } = useParams<{ topicId?: string }>();
   const { socket } = useSocket();
   const user = useAppSelector((state) => state.user);
-  const isFirstLoad = useRef(true); 
+  const isFirstLoad = useRef(true);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [existingAttachment, setExistingAttachment] = useState<any>(null);
@@ -41,18 +41,13 @@ const MessagePage: React.FC = () => {
     unseenMsg: 0,
     memberCount: 0,
   });
-interface User {
-    _id: string;
-    name: string;
-    email: string;
-    profile_pic: string;
-}
+
   const [openImageVideoUpload, setOpenImageVideoUpload] = useState(false);
   const [loading, setLoading] = useState(false);
   const [openAddMemberModal, setOpenAddMemberModal] = useState(false);
   const [allMessage, setAllMessage] = useState<IMessage[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]); 
-  const allUsers = useAppSelector((state) => state.user.allUsers); 
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const allUsers = useAppSelector((state) => state.user.allUsers);
   const [search, setSearch] = useState("");
   const [filteredUsers, setFilteredUsers] = useState(allUsers);
   const [message, setMessage] = useState<Partial<IMessage>>({
@@ -63,45 +58,46 @@ interface User {
     fileName: "",
   });
 
-  const ai= new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_AI_KEY });
+  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GOOGLE_AI_KEY });
   const handleScroll = () => {
-  if (!bottomRef.current) return;
+    if (!bottomRef.current) return;
 
-  // Show scrollbar
-  setIsScrolling(true);
+    // Show scrollbar
+    setIsScrolling(true);
 
-  clearTimeout(scrollTimeout.current);
-  scrollTimeout.current = setTimeout(() => {
-    setIsScrolling(false);
-  }, 800);
+    clearTimeout(scrollTimeout.current);
+    scrollTimeout.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, 800);
 
-  // Your existing button logic
-  //setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 100);
-};
-  /* AUTO SCROLL */ 
- const bottomRef  = useRef<HTMLDivElement | null>(null);
- useEffect(() => {
-  if (!bottomRef.current) return;
+    // Your existing button logic
+    //setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 100);
+  };
+  /* AUTO SCROLL */
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!bottomRef.current) return;
 
-  if (isFirstLoad.current) {
-    setTimeout(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "auto" });
-      isFirstLoad.current = false;
-    }, 50);
-  } else {
-    bottomRef.current.scrollIntoView({ behavior: "smooth" });
-  }
-}, [allMessage]);
-useEffect(() => {
-  if (!search.trim()) {
-    setFilteredUsers(allUsers);
-  } else {
-    const filtered = allUsers.filter((u) =>
-      u.name.toLowerCase().includes(search.toLowerCase())
-    );
-    setFilteredUsers(filtered);
-  }
-}, [search, allUsers]);
+    if (isFirstLoad.current) {
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+        isFirstLoad.current = false;
+      }, 50);
+    } else {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [allMessage]);
+  useEffect(() => {
+    if (!search.trim()) {
+      setFilteredUsers(allUsers);
+    } else {
+      setFilteredUsers(
+        allUsers.filter((u) =>
+          u.name.toLowerCase().includes(search.toLowerCase())
+        )
+      );
+    }
+  }, [search, allUsers]);
   const formatChatDate = (date: Date) => {
     if (isToday(date)) return "Today";
     if (isYesterday(date)) return "Yesterday";
@@ -121,96 +117,129 @@ useEffect(() => {
 
   /* FILE UPLOAD */
 
-  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    setNewAttachment(e.target.files?.[0] || null)
-    if (!file) return;
+  const handleUploadImage = async (
+  e: React.ChangeEvent<HTMLInputElement>
+) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-    setLoading(true);
+  setLoading(true);
+
+  try {
     const uploadUrl = await uploadFile(file);
-    setLoading(false); 
+
     if (file.type.startsWith("image/")) {
-      setMessage((prev) => ({ ...prev, imageUrl: uploadUrl.url }));
+      setMessage((prev) => ({
+        ...prev,
+        imageUrl: uploadUrl.url,
+        videoUrl: "",
+        fileUrl: "",
+        fileName: file.name,
+      }));
     } else {
       setMessage((prev) => ({
         ...prev,
         fileUrl: uploadUrl.url,
         fileName: file.name,
+        imageUrl: "",
+        videoUrl: "",
       }));
     }
-  };
-
-  const handleUploadVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setLoading(true);
-    const uploadUrl = await uploadFile(file);
+  } finally {
     setLoading(false);
+  }
+};
 
-    setMessage((prev) => ({ ...prev, videoUrl: uploadUrl.url }));
-  };
+  const handleUploadVideo = async (
+  e: React.ChangeEvent<HTMLInputElement>
+) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  setLoading(true);
+
+  try {
+    const uploadUrl = await uploadFile(file);
+
+    setMessage((prev) => ({
+      ...prev,
+      videoUrl: uploadUrl.url,
+      imageUrl: "",
+      fileUrl: "",
+      fileName: file.name,
+    }));
+  } finally {
+    setLoading(false);
+  }
+};
 
   /* SOCKET EVENTS */
 
   useEffect(() => {
-  if (!socket || !topicId) return; 
-  isFirstLoad.current = true;  
-  // CLEAR OLD DATA
-  setAllMessage([]);
-
-  // JOIN ROOM
-  socket.emit("join-topic", topicId);
-
-  /* HANDLERS */
-
-  const handleTopicDetails = (topic: IConversationSummary) => {
-    topic.memberCount = topic.participants?.length || 0;
-    setTopicData(topic);
-
-    // LOAD MESSAGES AFTER JOIN
-    socket.emit("load-messages", topicId);
-  };
-
-  const handleTopicMessages = (msgs: IMessage[]) => {
-    setAllMessage(msgs);
-  };
-
-  const handleNewMessage = (msg: IMessage) => {
-    setAllMessage((prev) => {
-      if (prev.find((m) => m._id === msg._id)) return prev;
-      return [...prev, msg];
+    if (!socket || !topicId) return;
+    isFirstLoad.current = true;
+    // CLEAR OLD DATA
+    setAllMessage([]);
+    setTopicData({
+      _id: "",
+      topic: "",
+      topicImage: "",
+      lastMessage: undefined,
+      unseenMsg: 0,
+      memberCount: 0,
     });
-  };
+    // JOIN ROOM
+    socket.emit("join-topic", topicId);
 
-  const handleUpdatedMessage = (updatedMsg: IMessage) => {
-    setAllMessage((prev) =>
-      prev.map((msg) =>
-        msg._id.toString() === updatedMsg._id.toString()
-          ? updatedMsg
-          : msg
-      )
-    );
-  };
-  socket.emit("add-members-to-topic", {
-  topicId,
-  members: selectedUsers,
-  });
-  /* REGISTER EVENTS */
-  socket.on("topic-details", handleTopicDetails);
-  socket.on("topic-messages", handleTopicMessages);
-  socket.on("new-topic-message", handleNewMessage);
-  socket.on("message-updated", handleUpdatedMessage);
+    /* HANDLERS */
 
-  /* CLEANUP */
-  return () => {
-    socket.off("topic-details", handleTopicDetails);
-    socket.off("topic-messages", handleTopicMessages);
-    socket.off("new-topic-message", handleNewMessage);
-    socket.off("message-updated", handleUpdatedMessage);
-  };
+    const handleTopicDetails = (topic: IConversationSummary) => {
+      topic.memberCount = topic.participants?.length || 0;
+      setTopicData(topic);
 
-}, [socket, topicId]); 
+      // LOAD MESSAGES AFTER JOIN
+      socket.emit("load-messages", topicId);
+    };
+
+    const handleTopicMessages = (msgs: IMessage[]) => {
+      setAllMessage(msgs);
+    };
+
+    const handleNewMessage = (msg: IMessage) => {
+      setAllMessage((prev) => {
+        if (prev.find((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
+      });
+    };
+
+    const handleUpdatedMessage = (updatedMsg: IMessage) => {
+      setAllMessage((prev) =>
+        prev.map((msg) =>
+          msg._id.toString() === updatedMsg._id.toString()
+            ? updatedMsg
+            : msg
+        )
+      );
+    };
+    // socket.emit("add-members-to-topic", {
+    //   topicId,
+    //   members: selectedUsers,
+    // });
+    /* REGISTER EVENTS */
+    socket.on("topic-details", handleTopicDetails);
+    socket.on("topic-messages", handleTopicMessages);
+    socket.on("new-topic-message", handleNewMessage);
+    socket.on("message-updated", handleUpdatedMessage);
+
+    /* CLEANUP */
+    return () => {
+      socket.off("topic-details", handleTopicDetails);
+      socket.off("topic-messages", handleTopicMessages);
+      socket.off("new-topic-message", handleNewMessage);
+      socket.off("message-updated", handleUpdatedMessage);
+    };
+
+  }, [socket, topicId]);
 
   /* GET MESSAGE TEXT */
 
@@ -242,13 +271,19 @@ useEffect(() => {
 
     if (editorRef.current) editorRef.current.innerHTML = "";
 
-    setMessage({});
+    setMessage({
+      text: "",
+      imageUrl: "",
+      videoUrl: "",
+      fileUrl: "",
+      fileName: "",
+    });
     if (allMessage.length === 1 || textValue.includes("@ai")) {
-        let msg = textValue.replace("@ai", "").trim()
-        getAiRespoonse(msg)
-      }
+      let msg = textValue.replace("@ai", "").trim()
+      getAiRespoonse(msg)
+    }
   };
-const getAiRespoonse = async (userMessage: string) => {
+  const getAiRespoonse = async (userMessage: string) => {
     try {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -256,14 +291,14 @@ const getAiRespoonse = async (userMessage: string) => {
       });
       if (!socket || !topicId) return;
       socket.emit("send-topic-message", {
-      topicId,
-      sender: user?._id,
-      text: response.text,
-      imageUrl: message.imageUrl,
-      videoUrl: "",
-      fileUrl: "",
-      fileName: "",
-    });
+        topicId,
+        sender: user?._id,
+        text: response.text,
+        imageUrl: message.imageUrl,
+        videoUrl: "",
+        fileUrl: "",
+        fileName: "",
+      });
       setMessage({
         text: "",
         imageUrl: "",
@@ -319,66 +354,74 @@ const getAiRespoonse = async (userMessage: string) => {
     setExistingAttachment(null);
   };
 
-const handleSelectUser = (userId: string, checked: boolean) => { 
-  setSelectedUsers((prev) => {
-    const set = new Set(prev);
+  /*const handleSelectUser = (userId: string, checked: boolean) => {
+    setSelectedUsers((prev) => {
+      const set = new Set(prev);
 
-    if (checked) set.add(userId);
-    else set.delete(userId);
+      if (checked) set.add(userId);
+      else set.delete(userId);
 
-    return Array.from(set);
-  });
-  console.log(allUsers);
-console.log(existingUserIds);
-console.log(selectedUsers);
-};
-const handleAddMembers = async () => {
-  if (!socket || !topicId) return; 
-  // const participantIds = selectedUsers
-  //       .map(u => u._id)
-  //       .filter(id => id && id.length === 24);
+      return Array.from(set);
+    });
+    console.log(allUsers);
+    console.log(existingUserIds);
+    console.log(selectedUsers);
+  };*/
+  const handleAddMembers = async () => {
+    if (!socket || !topicId) return;
+    // const participantIds = selectedUsers
+    //       .map(u => u._id)
+    //       .filter(id => id && id.length === 24);
 
-    if (selectedUsers.length < 2) {
-        toast.error("Select at least one user to create group");
-        return;
-    } 
+    if (selectedUsers.length < 1) {
+      toast.error("Select at least one user to create group");
+      return;
+    }
     try {
-        await axios.put(
-          `${import.meta.env.VITE_API_URL}/api/conversations/${topicId}/add-members`,
-          {
-            members: selectedUsers, // new users to add
+      await axios.put(
+        `${import.meta.env.VITE_API_URL}/api/conversations/${topicId}/add-members`,
+        {
+          members: selectedUsers, // new users to add
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
-        toast.success("Group Members Updated!");
-        //onClose();
+        }
+      );
+      toast.success("Group Members Updated!");
+      //onClose();
     } catch (err: any) {
-        toast.error(err?.response?.data?.message || "Failed to create group");
+      toast.error(err?.response?.data?.message || "Failed to create group");
     }
 
-  setOpenAddMemberModal(false);
-  setSelectedUsers([]);
-};
-const handleOpenAddMember = async () => {
-  setOpenAddMemberModal(true);
+    setOpenAddMemberModal(false);
+    setSelectedUsers([]);
+  };
+  const handleOpenAddMember = async () => {
+    setOpenAddMemberModal(true);
 
-  if (allUsers.length === 0) {
-    const res = await axios.post(
-      `${import.meta.env.VITE_API_URL}/api/search-user`,      
-      { search: "" } 
-    ); 
-    dispatch(setAllUsers(res.data.data));
-  }
+    if (allUsers.length === 0) {
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/search-user`,
+        { search: "" }
+      );
+      dispatch(setAllUsers(res.data.data));
+    }
+  };
+  const existingUserIds =
+    topicData.participants?.map((p: any) =>
+      typeof p === "string" ? p : p._id
+    ) || [];
+    const toggleUser = (userId: string) => {
+  setSelectedUsers((prev) =>
+    prev.includes(userId)
+      ? prev.filter((id) => id !== userId) // remove
+      : [...prev, userId] // add
+  );
 };
-const existingUserIds =
-  topicData.participants?.map((p: any) =>
-    typeof p === "string" ? p : p._id
-  ) || [];
   return (
+    <>
     <div className="bg-white h-screen flex flex-col"
     >
       {/* HEADER */}
@@ -413,15 +456,14 @@ const existingUserIds =
 
       {/* MESSAGE AREA */}
 
-      <section 
-  className="h-[calc(100vh-128px)] overflow-y-auto p-3 chat-scroll"
->
+      <section key={topicId}
+        className="h-[calc(100vh-128px)] overflow-y-auto p-3 chat-scroll"
+      >
         {Object.entries(groupedMessages).map(([date, msgs]) => (
-          <div key={date} ref={bottomRef} onScroll={handleScroll} onMouseEnter={() => setIsScrolling(true)}
-  onMouseLeave={() => setIsScrolling(false)} className={`${
-    isScrolling ? "scroll-visible" : "scroll-hidden"
-  }`}>
-
+          <div key={date} onScroll={handleScroll} onMouseEnter={() => setIsScrolling(true)}
+            onMouseLeave={() => setIsScrolling(false)} className={`${isScrolling ? "scroll-visible" : "scroll-hidden"
+              }`}>
+                
             <div className="text-center text-xs text-gray-400 my-4">
               {formatChatDate(new Date(date))}
             </div>
@@ -448,8 +490,8 @@ const existingUserIds =
                 <div
                   key={msg._id}
                   className={`relative group p-2 max-w-[60%] rounded-lg px-3 py-2 ${user?._id === (typeof msg.sender === "string" ? msg.sender : (typeof msg.sender === "string" ? msg.sender : msg.sender._id))
-                      ? "bg-teal-100"
-                      : "bg-gray-100"
+                    ? "bg-teal-100"
+                    : "bg-gray-100"
                     }`}
                 >
 
@@ -605,23 +647,20 @@ const existingUserIds =
                           }
                         }}
                       />
-
                       <FiMoreVertical />
-
                     </div>
                   )}
-
                 </div>
               </div>
             ))}
-
           </div>
         ))}
- 
+
         {loading && <Loading />}
+        <div ref={bottomRef}></div>
       </section>
 
-      <section className="h-16 bg-white flex items-center px-4">
+      <section className="bg-white px-4 py-2 h-auto min-h-16">
         <button
           onClick={() =>
             setOpenImageVideoUpload((prev) => !prev)
@@ -647,98 +686,157 @@ const existingUserIds =
             </label>
           </div>
         )}
-        <form
-          onSubmit={handleSendMessage}
-          className="flex gap-2 w-full ml-2"
-        >
-          <div
-            ref={editorRef}
-            contentEditable
-            className="flex-1 border rounded-xl px-3 py-2"
-          />
-          <button className="text-primary">
-            <IoSend size={26} />
-          </button>
-        </form>
+        <section className="bg-white px-4 py-2 h-auto min-h-16">
+  <form
+    onSubmit={handleSendMessage}
+    className="flex gap-2 w-full items-end"
+  >
+      <div
+        ref={editorRef}
+        contentEditable
+        className="flex-1 border rounded-xl px-3 py-2 min-h-[44px] max-h-40 overflow-y-auto"
+      >
+         <div className="flex-1">
+      {(message.imageUrl || message.videoUrl || message.fileUrl) && (
+        <div className="mb-2">
+          {message.imageUrl && (
+            <img
+              src={message.imageUrl}
+              className="h-24 rounded-lg"
+              alt="preview"
+            />
+          )}
+
+          {message.videoUrl && (
+            <video
+              src={message.videoUrl}
+              controls
+              className="h-24 rounded-lg"
+            />
+          )}
+
+          {message.fileUrl && (
+            <a
+              href={message.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 underline"
+            >
+              {message.fileName}
+            </a>
+          )}
+        </div>
+      )}
+        </div>
+    </div>
+
+    <button className="text-primary mb-1">
+      <IoSend size={26} />
+    </button>
+  </form>
+</section>    
       </section>
 
       {openAddMemberModal && (
-  <div className="fixed inset-0 bg-black/30 flex justify-center items-center z-50">
-    
-    <div className="bg-white w-[420px] rounded-lg shadow-lg flex flex-col max-h-[500px]">
+        <div className="fixed inset-0 bg-black/30 flex justify-center items-center z-50">
 
-      {/* HEADER */}
-      <div className="flex justify-between items-center p-4 border-b">
-        <h3 className="font-semibold text-lg">Add People</h3>
-        <button
-          onClick={() => setOpenAddMemberModal(false)}
-          className="text-gray-500 hover:text-black text-lg"
+          <div className="bg-white w-[420px] rounded-lg shadow-lg flex flex-col max-h-[500px]">
+
+            {/* HEADER */}
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="font-semibold text-lg">Add People</h3>
+              <button
+                onClick={() => setOpenAddMemberModal(false)}
+                className="text-gray-500 hover:text-black text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* SEARCH */}
+            <div className="p-3 border-b">
+              <input
+                type="text"
+                placeholder="Search People"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* SELECTED USERS */}
+            <div className="max-h-[300px] overflow-y-auto pr-1">
+              {filteredUsers.map((u) => {
+  const isSelected = selectedUsers.includes(u._id);
+  const isExisting = existingUserIds.includes(u._id);
+  return (
+    <div
+      key={u._id}
+      onClick={() => {
+        if (isExisting) return; 
+        toggleUser(u._id);
+      }}
+      className={`flex items-center justify-between p-2 rounded border 
+        ${isExisting
+            ? "bg-gray-100 opacity-60 cursor-not-allowed"
+            : isSelected
+            ? "border-teal-500 bg-teal-50 cursor-pointer"
+            : "hover:bg-gray-100 cursor-pointer"}
+      `}
+    >
+      {/* LEFT: Avatar + Name */}
+      <div className="flex items-center gap-3">
+        <Avatar
+          width={35}
+          height={35}
+          name={u.name}
+          imageUrl={u.profile_pic}
+          userId={u._id}
+        />
+        <div>
+          <p className="text-sm font-medium">{u.name}</p>
+          <p className="text-xs text-gray-500">{u.email}</p>
+        </div>
+      </div>
+
+      {/* RIGHT: Tick / Cross */}
+      <div className="text-lg">
+        {
+        isExisting
+            ? ""
+            : 
+        isSelected ? (
+  <FiCheck className="text-teal-500 text-xl" />
+) : (
+  <FiPlus className="text-gray-400 text-xl" />
+)}
+      </div>
+    </div>
+  );
+})}
+            </div>
+            {/* <div className="flex flex-wrap gap-2 mb-3">
+  {selectedUsers.map((id) => {
+    const user = allUsers.find((u) => u._id === id);
+    if (!user) return null;
+
+    return (
+      <div
+        key={id}
+        className="flex items-center gap-2 bg-teal-500 text-white px-2 py-1 rounded-full text-sm"
+      >
+        {user.name}
+        <span
+          className="cursor-pointer"
+          onClick={() => toggleUser(id)}
         >
           ✕
-        </button>
+        </span>
       </div>
-
-      {/* SEARCH */}
-      <div className="p-3 border-b">
-        <input
-          type="text"
-          placeholder="Search People"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
-
-      {/* USER LIST */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {filteredUsers.map((u) => {
-          const isExisting = existingUserIds.includes(u._id);
-
-          return (
-            <label
-              key={u._id}
-              className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-100 ${
-                isExisting ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              <input
-                type="checkbox"
-                disabled={isExisting}
-                checked={selectedUsers.includes(u._id)}
-                onChange={(e) =>
-                  handleSelectUser(u._id, e.target.checked)
-                }
-              />
-
-              {/* Avatar */}
-              <div className="w-8 h-8 rounded-full bg-gray-300 overflow-hidden">
-                {u.profile_pic ? (
-                  <img
-                    src={u.profile_pic}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-sm">
-                    {u.name?.charAt(0)}
-                  </div>
-                )}
-              </div>
-
-              {/* Name */}
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">{u.name}</span>
-                {isExisting && (
-                  <span className="text-xs text-gray-400">
-                    Already added
-                  </span>
-                )}
-              </div>
-            </label>
-          );
-        })}
-      </div>
-
-      {/* FOOTER */}
+    );
+  })}
+</div> */}
+{/* FOOTER */}
       <div className="flex justify-end gap-2 p-3 border-t">
         <button
           onClick={() => setOpenAddMemberModal(false)}
@@ -755,10 +853,12 @@ const existingUserIds =
           Add
         </button>
       </div>
+          </div>
+        </div>
+      )}
     </div>
-  </div>
-)}
-    </div>    
+    
+</>
   );
 };
 

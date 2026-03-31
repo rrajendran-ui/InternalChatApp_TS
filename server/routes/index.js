@@ -7,7 +7,7 @@ const logout = require('../controller/logout')
 const updateUserDetails = require('../controller/updateUserDetails')
 const searchUser = require('../controller/searchUser')
 const {createConversation,addMembersToConversation} = require('../controller/conversation') 
-
+const {forgotPassword, verifyOTP, resetPassword,} = require('../controller/forgotPassword')
 const router = express.Router()
 
 //create user api
@@ -26,6 +26,10 @@ router.post('/update-user',updateUserDetails)
 router.post("/search-user",searchUser)
 //create conversation
 router.post("/conversations", createConversation)
-
+//forgot password
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
+router.post("/verify-otp", verifyOTP);
+//add members to conversation
 router.put("/conversations/:id/add-members", addMembersToConversation);
 module.exports = router
