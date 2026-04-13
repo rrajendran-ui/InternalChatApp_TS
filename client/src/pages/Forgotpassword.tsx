@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -70,7 +71,7 @@ const verifyOtp = async () => {
             placeholder="Enter email"
             onChange={(e) => setEmail(e.target.value)}
           />
-          <button onClick={sendOtp} className="bg-blue-500 text-white p-2 w-full">
+          <button onClick={sendOtp} className="w-full bg-primary text-lg  px-4 py-1 hover:bg-secondary rounded mt-2 font-bold text-white leading-relaxed tracking-wide">
             Send OTP
           </button>
         </>
@@ -83,7 +84,7 @@ const verifyOtp = async () => {
             placeholder="Enter OTP"
             onChange={(e) => setOtp(e.target.value)}
           />
-          <button onClick={verifyOtp} className="bg-blue-500 text-white p-2 w-full">
+          <button onClick={verifyOtp} className="w-full bg-primary text-lg  px-4 py-1 hover:bg-secondary rounded mt-2 font-bold text-white leading-relaxed tracking-wide">
             Verify OTP
           </button>
         </>
@@ -97,7 +98,7 @@ const verifyOtp = async () => {
             placeholder="New Password"
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button onClick={resetPassword} className="bg-green-500 text-white p-2 w-full">
+          <button onClick={resetPassword} className="w-full bg-primary text-lg  px-4 py-1 hover:bg-secondary rounded mt-2 font-bold text-white leading-relaxed tracking-wide">
             Reset Password
           </button>
         </>
@@ -111,7 +112,9 @@ const verifyOtp = async () => {
         </a >
         </>
       ) }
+       <Link to={"/"} className='block text-center hover:text-primary font-semibold'>Login</Link>
     </div>
+    
   );
 };
 

@@ -661,15 +661,7 @@ const MessagePage: React.FC = () => {
       </section>
 
       <section className="bg-white px-4 py-2 h-auto min-h-16">
-        <button
-          onClick={() =>
-            setOpenImageVideoUpload((prev) => !prev)
-          }
-          className="w-10 h-10 flex justify-center items-center rounded-full hover:bg-gray-200"
-        >
-          <FaPlus />
-        </button>
-
+        
         {openImageVideoUpload && (
           <div className="absolute bottom-16 bg-white shadow rounded w-36 p-2">
             <label className="flex items-center gap-2 p-2 cursor-pointer hover:bg-gray-100">
@@ -691,6 +683,14 @@ const MessagePage: React.FC = () => {
     onSubmit={handleSendMessage}
     className="flex gap-2 w-full items-end"
   >
+    <button
+          onClick={() =>
+            setOpenImageVideoUpload((prev) => !prev)
+          }
+          className="w-10 h-10 flex justify-center items-center rounded-full hover:bg-gray-200"
+        >
+          <FaPlus />
+        </button>
       <div
         ref={editorRef}
         contentEditable

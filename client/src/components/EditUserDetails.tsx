@@ -6,7 +6,7 @@ import axios from 'axios'
 import taost from 'react-hot-toast'
 import { useDispatch } from 'react-redux'
 import { setUser } from '../redux/userSlice'
-
+import { Link } from 'react-router-dom'
 
 const EditUserDetails = ({onClose,user}) => {
     const [data,setData] = useState({
@@ -43,8 +43,10 @@ const EditUserDetails = ({onClose,user}) => {
 
         uploadPhotoRef.current?.click()
     }
-    const handleUploadPhoto = async(e)=>{
-        const file = e.target.files[0]
+    const handleUploadPhoto = async(e: React.ChangeEvent<HTMLInputElement>)=>{
+        const file = e.target.files?.[0]
+
+        if(!file) return
 
         const uploadPhoto = await uploadFile(file)
 
@@ -111,7 +113,7 @@ const EditUserDetails = ({onClose,user}) => {
                             name={data?.name}
                         />
                         <label htmlFor='profile_pic'>
-                        <button className='font-semibold' onClick={handleOpenUploadPhoto}>Change Photo</button>
+                        <button className='font-semibold mr-2' onClick={handleOpenUploadPhoto}>Change Photo </button>
                         <input
                             type='file'
                             id='profile_pic'
@@ -119,6 +121,13 @@ const EditUserDetails = ({onClose,user}) => {
                             onChange={handleUploadPhoto}
                             ref={uploadPhotoRef}
                         />
+                        <div>
+                        <Link
+    to="/changepassword"
+    className="font-semibold"
+  >
+    Change Password
+  </Link></div>
                         </label>
                     </div>
                 </div>

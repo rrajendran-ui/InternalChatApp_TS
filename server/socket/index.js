@@ -23,7 +23,6 @@ const users = [
 ];
 const otpStore = {}; // { email: otp }
 io.on('connection', async (socket) => {
-  console.log('step 2');
   console.log("Connected:", socket.id);
 //forgotPasswordSocket(socket);
   socket.onAny((event, ...args) => {
@@ -61,7 +60,6 @@ if (!token) {
   /* ================= SIDEBAR ================= */
   socket.on('sidebar', async (currentUserId) => {
     try {
-      console.log('step 3');
       const conversations = await ConversationModel.find({
         participants: currentUserId,
         isArchived: false
